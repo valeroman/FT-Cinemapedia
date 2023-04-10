@@ -1,6 +1,8 @@
-import 'package:cinemapedia/presentation/providers/movies/movies_providers.dart';
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../providers/providers.dart';
 
 
 class HomeScreen extends StatelessWidget {
@@ -15,6 +17,7 @@ class HomeScreen extends StatelessWidget {
       body: Center(
         child: _HomeView(),
       ),
+      bottomNavigationBar: CustomBottomNavigation(),
     );
   }
 }
@@ -39,15 +42,76 @@ class _HomeViewState extends ConsumerState<_HomeView> {
   Widget build(BuildContext context) {
 
     final nowPlayingMovies = ref.watch( nowPlayingMoviesProvider );
+    final slideShowMovies = ref.watch(moviesSlideshowProvider);
 
-    return ListView.builder(
-      itemCount: nowPlayingMovies.length,
-      itemBuilder: (context, index) {
-        final movie = nowPlayingMovies[index];
-        return ListTile(
-          title: Text( movie.title ),
-        );
-      },
+    return CustomScrollView(
+      slivers: [
+
+        const SliverAppBar(
+          floating: true,
+          flexibleSpace: FlexibleSpaceBar(
+            title: CustomAppbar(),
+          ),
+        ),
+
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              return Column(
+                children: [
+            
+                  // const CustomAppbar(),
+            
+                  MoviesSlideshow(movies: slideShowMovies),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'En Cine',
+                    subTitle: 'Lunes 20',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'Proximamente',
+                    subTitle: 'En este mes',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'Populares',
+                    // subTitle: 'En este mes',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'Mejor calificadas',
+                    subTitle: 'Desde siempre',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+                ]
+              );
+            },
+            childCount: 1,
+          )
+        )
+      ],
     );
   }
 }

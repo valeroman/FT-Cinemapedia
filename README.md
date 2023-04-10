@@ -458,14 +458,47 @@ class MovieMapper {
 
 - el código queda asi:
 ```
-final movieDBResponse = MovieDbResponse.fromJson(response.data);
 
-// El where => nos ayuda a filtrar si no tenemos imagen del poster, no se crea la movie
-final List<Movie> movies = movieDBResponse.results
-.where((moviedb) => moviedb.posterPath != 'no-poster')
-.map(
-    (moviedb) => MovieMapper.movieDBToEntity(moviedb)
-).toList();
+import 'package:cinemapedia/config/constants/environment.dart';
+import 'package:cinemapedia/domain/datasources/movies_datasource.dart';
+import 'package:cinemapedia/domain/entities/movie.dart';
+import 'package:cinemapedia/infrastructure/mappers/movie_mapper.dart';
+import 'package:cinemapedia/infrastructure/models/moviedb/moviedb_response.dart';
+import 'package:dio/dio.dart';
+
+class MoviedbDatasource extends MoviesDatasource {
+
+    // Propiedades de la clase MoviedbDatasource
+    final dio = Dio(BaseOptions(
+      baseUrl: 'https://api.themoviedb.org/3',
+      queryParameters: {
+        'api_key': Environment.theMovieDbKey,
+        'language': 'es-ES' // es-MX
+      }
+    ));
+
+
+  @override
+  Future<List<Movie>> getNowPlaying({int page = 1}) async {
+
+    final response = await dio.get('/movie/now_playing',
+      queryParameters: {
+        'page': page
+      }
+    );
+
+    final movieDBResponse = MovieDbResponse.fromJson(response.data);
+
+    // El where => nos ayuda a filtrar si no tenemos imagen del poster, no se crea la movie
+    final List<Movie> movies = movieDBResponse.results
+    .where((moviedb) => moviedb.posterPath != 'no-poster')
+    .map(
+      (moviedb) => MovieMapper.movieDBToEntity(moviedb)
+    ).toList();
+
+    return movies;
+  }
+}
 ```
 
 ### Implementación del Repositorio
@@ -665,5 +698,1224 @@ class _HomeViewState extends ConsumerState<_HomeView> {
 }
 ```
 
+### Widgets del la aplicación:
+
+
+####  - Appbar -
+
+- Creamos dentro de la carpeta `presentation` la carpeta `widgets` y dentro la carpeta `widgets` creamos la carpeta `shared` que es de uso general
+- Dentro de `shared`, creamos el archivo `custom_appbar.dart`
+
+- En el archivo `custom_appbar.dart` agregamos el siguiente código:
+
+```
+import 'package:flutter/material.dart';
+
+class CustomAppbar extends StatelessWidget {
+  const CustomAppbar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Placeholder();
+  }
+}
+```
+
+- Creamos el archivo de barril `widgets.dart`, dentro de la carpeta `widgets`
+- agregamos el código:
+```
+export 'shared/custom_appbar.dart';
+```
+
+- Ahora vamos al archivo `home_screem.dart`, realizamos unos cambios como:
+  1 - Cortamos el `ListView.builder` y agregamos un `Column`, luego pegamos el `Lisview.Builder`, en los `children` del Column, al `ListView.builder` lo envolvemos en un nuevo widget `Expanded`
+  2 - Agregamos el `CustomAppbar` al children de `Column`, el código quedaria asi:
+
+  ```
+  @override
+  Widget build(BuildContext context) {
+
+    final nowPlayingMovies = ref.watch( nowPlayingMoviesProvider );
+
+    return Column(
+      children: [
+
+        CustomAppbar(),
+
+        Expanded(
+          child: ListView.builder(
+            itemCount: nowPlayingMovies.length,
+            itemBuilder: (context, index) {
+              final movie = nowPlayingMovies[index];
+              return ListTile(
+                title: Text( movie.title ),
+              );
+            },
+          ),
+        )
+      ]
+    );
+  }
+  ```
+
+- Ahora vamos a cambiar el diseño del`custom_appbar.dart`
+- Agregamos el siguiente códiigo:
+
+```
+import 'package:flutter/material.dart';
+
+class CustomAppbar extends StatelessWidget {
+  const CustomAppbar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+
+    final colors = Theme.of(context).colorScheme;
+    final titleStyle = Theme.of(context).textTheme.titleMedium;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: SizedBox(
+          width: double.infinity,
+          child: Row(
+            children: [
+              Icon(Icons.movie_outlined, color: colors.primary),
+              const SizedBox( width: 5 ),
+              Text('Cinemapedia', style: titleStyle,),
+      
+              const Spacer(),
+      
+              IconButton(
+                onPressed: (){}, 
+                icon: const Icon(Icons.search)
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+- Nota: si queremos ver el area del widget de un color rojo, por ejemplo, entonces envolvemos en un nuevo widget el `Padding` y agregamos el `Container` y al `Container`, le colocamos le propiedad `color: Colors.red` .
+
+- Código de ejemplo del  `Container`:
+```
+@override
+  Widget build(BuildContext context) {
+
+    final colors = Theme.of(context).colorScheme;
+    final titleStyle = Theme.of(context).textTheme.titleMedium;
+
+    return SafeArea(
+      child: Container(
+        color: Colors.red,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: SizedBox(
+            width: double.infinity,
+            child: Row(
+              children: [
+                Icon(Icons.movie_outlined, color: colors.primary),
+                const SizedBox( width: 5 ),
+                Text('Cinemapedia', style: titleStyle,),
+        
+                const Spacer(),
+        
+                IconButton(
+                  onPressed: (){}, 
+                  icon: const Icon(Icons.search)
+                )
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+```
+- Para quitar el `Padding` removemos el widget.
+
 - 
 
+####  - MovieSlideShow - Carrusel de peliculas
+
+Documentación: https://pub.dev/packages/card_swiper
+
+- Usaremos un paquete de terceros llamado: `card_swiper`, e instalamos la libreria.
+
+- Ahora dentro de la carpeta `presentation -> widgets`, creamos la carpeta `movies`, ya que el carrusel esta relacionado a peliculas, quiero mostrar las peliculas
+
+- Y dentro de `movies`, cramos el archivo `movies_slideshow.dart`
+- Agregamos el siguuiente código:
+```
+import 'package:flutter/material.dart';
+import '../../../domain/entities/movie.dart';
+
+class MoviesSlideshow extends StatelessWidget {
+
+  final List<Movie> movies;
+
+  const MoviesSlideshow({
+    super.key, 
+    required this.movies
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return const Placeholder();
+  }
+}
+```
+
+- Ahora vamos al archivo `home_screem.dart`, realizamos unos cambios.
+
+- Quitamos el ListView.builder por que ya no vamos a mostrar la lista de peliculas.
+- Agregamos nuestro widget `MoviesSlideshow`, el código seria asi:
+
+```
+@override
+  Widget build(BuildContext context) {
+
+    final nowPlayingMovies = ref.watch( nowPlayingMoviesProvider );
+
+    return Column(
+      children: [
+
+        const CustomAppbar(),
+        MoviesSlideshow(movies: nowPlayingMovies),
+
+      ]
+    );
+  }
+```
+
+- Ahora vamos a cambiar el diseño del`movies_slideshow.dart`
+- Agregamos el siguiente códiigo:
+
+```
+
+
+import 'package:card_swiper/card_swiper.dart';
+import 'package:flutter/material.dart';
+import '../../../domain/entities/movie.dart';
+
+class MoviesSlideshow extends StatelessWidget {
+
+  final List<Movie> movies;
+
+  const MoviesSlideshow({
+    super.key, 
+    required this.movies
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 210,
+      width: double.infinity,
+      child: Swiper(
+        viewportFraction: 0.8,
+        scale: 0.9,
+        autoplay: true,
+        itemCount: movies.length,
+        itemBuilder: (context, index) => _Slide(movie: movies[index])
+      ),
+    );
+  }
+}
+
+class _Slide extends StatelessWidget {
+
+  final Movie movie;
+
+  const _Slide({required this.movie});
+
+  @override
+  Widget build(BuildContext context) {
+    return Placeholder();
+  }
+}
+```
+
+#### Mostrar información en los slides y punticos
+
+- Agregamos el siguiente código en `movies_slideshow.dart`.
+
+```
+
+
+import 'package:card_swiper/card_swiper.dart';
+import 'package:flutter/material.dart';
+import '../../../domain/entities/movie.dart';
+
+class MoviesSlideshow extends StatelessWidget {
+
+  final List<Movie> movies;
+
+  const MoviesSlideshow({
+    super.key, 
+    required this.movies
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 210,
+      width: double.infinity,
+      child: Swiper(
+        viewportFraction: 0.8,
+        scale: 0.9,
+        autoplay: true,
+        itemCount: movies.length,
+        itemBuilder: (context, index) => _Slide(movie: movies[index])
+      ),
+    );
+  }
+}
+
+class _Slide extends StatelessWidget {
+
+  final Movie movie;
+
+  const _Slide({required this.movie});
+
+  @override
+  Widget build(BuildContext context) {
+
+    final decoration = BoxDecoration(
+      borderRadius: BorderRadius.circular(20),
+      boxShadow: const [
+        BoxShadow(
+          color: Colors.black45,
+          blurRadius: 10,
+          offset: Offset(0, 10)
+        )
+      ]
+    );
+
+    return Container(
+      color: Colors.red,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 30),
+        child: DecoratedBox(
+          decoration: decoration,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Image.network(
+              movie.backdropPath,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, loadingProgress) {
+                if ( loadingProgress != null ) {
+                  return const DecoratedBox(
+                    decoration: BoxDecoration( color: Colors.black12 )
+                  );
+                }
+
+                return child;
+              },
+            )
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+- Ahora agregamos el paquete de animaciones `animate-do`, en el return del child agregamos `return FadeIn(child: child)`
+
+- Agregamos los punticos y removemos el Container para quitar el color rojo:
+
+```
+import 'package:animate_do/animate_do.dart';
+import 'package:card_swiper/card_swiper.dart';
+import 'package:flutter/material.dart';
+import '../../../domain/entities/movie.dart';
+
+class MoviesSlideshow extends StatelessWidget {
+
+  final List<Movie> movies;
+
+  const MoviesSlideshow({
+    super.key, 
+    required this.movies
+  });
+
+  @override
+  Widget build(BuildContext context) {
+
+    final colors = Theme.of(context).colorScheme;
+
+    return SizedBox(
+      height: 210,
+      width: double.infinity,
+      child: Swiper(
+        viewportFraction: 0.8,
+        scale: 0.9,
+        autoplay: true,
+        pagination: SwiperPagination(
+          margin: const EdgeInsets.only(top: 0),
+          builder: DotSwiperPaginationBuilder(
+            activeColor: colors.primary,
+            color: colors.secondary
+          )
+        ),
+        itemCount: movies.length,
+        itemBuilder: (context, index) => _Slide(movie: movies[index])
+      ),
+    );
+  }
+}
+
+class _Slide extends StatelessWidget {
+
+  final Movie movie;
+
+  const _Slide({required this.movie});
+
+  @override
+  Widget build(BuildContext context) {
+
+    final decoration = BoxDecoration(
+      borderRadius: BorderRadius.circular(20),
+      boxShadow: const [
+        BoxShadow(
+          color: Colors.black45,
+          blurRadius: 10,
+          offset: Offset(0, 10)
+        )
+      ]
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 30),
+      child: DecoratedBox(
+        decoration: decoration,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Image.network(
+            movie.backdropPath,
+            fit: BoxFit.cover,
+            loadingBuilder: (context, child, loadingProgress) {
+              if ( loadingProgress != null ) {
+                return const DecoratedBox(
+                  decoration: BoxDecoration( color: Colors.black12 )
+                );
+              }
+
+              return FadeIn(child: child);
+            },
+          )
+        ),
+      ),
+    );
+  }
+}
+```
+
+#### Movies Slideshow Provider - Riverpod
+
+- Creamos un nuevo Provider de riverpod para mostar solo 6 piliculas, para eso creamos el archivo `movies_slideshow_provider.dart`, dentro de la carpeta `presentation -> providers -> movies`
+
+- Agregamos el siguiente código:
+```
+import 'package:cinemapedia/domain/entities/movie.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'movies_providers.dart';
+
+// Provider de solo lectura que va a mostrar solo 6 peliculas en el slideshow
+final moviesSlideshowProvider = Provider<List<Movie>>((ref) {
+
+  final nowPlayingMovies = ref.watch( nowPlayingMoviesProvider );
+
+  if ( nowPlayingMovies.isEmpty ) return [];
+
+  return nowPlayingMovies.sublist(0, 6);
+
+});
+```
+
+- Ahora nos vamos al `home_screen.dart` y llamamos el nuevo provider `moviesSlideshowProvider`
+
+- Agregamos el código:
+```
+@override
+  Widget build(BuildContext context) {
+
+    // final nowPlayingMovies = ref.watch( nowPlayingMoviesProvider );
+    final slideShowMovies = ref.watch(moviesSlideshowProvider);
+
+    return Column(
+      children: [
+
+        const CustomAppbar(),
+        MoviesSlideshow(movies: slideShowMovies),
+
+      ]
+    );
+  }
+```
+
+####  - CustomBottomNavigationBar -
+
+- creamos el archivo `custom_bottom_navigationbar.dart`, en la carpeta `presentation -> widgets -> shared` y agregamos el código:
+
+```
+import 'package:flutter/material.dart';
+
+class CustomBottomNavigation extends StatelessWidget {
+  const CustomBottomNavigation({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return BottomNavigationBar(
+      elevation: 0,
+      items: const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.home_max),
+          label: 'Inicio'
+        ),
+         BottomNavigationBarItem(
+          icon: Icon(Icons.label_outline),
+          label: 'Categorías'
+        ),
+         BottomNavigationBarItem(
+          icon: Icon(Icons.favorite_outline),
+          label: 'Favoritos'
+        )
+      ],
+    );
+  }
+}
+```
+
+- Y en el `home_screen.dart` usamos el  `CustombottomNavigation`
+```
+@override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: _HomeView(),
+      ),
+      bottomNavigationBar: CustomBottomNavigation(),
+    );
+  }
+```
+
+####  - Movie Horizontal ListView -
+
+- Creamos el archivo `movie_horizontal_listview.dart`, en la carpeta `presentation -> widgets -> movies`, y agregamos el código:
+
+```
+import 'package:flutter/material.dart';
+
+import '../../../domain/entities/movie.dart';
+
+class MovieHorizontalListview extends StatelessWidget {
+
+  // Propiedades
+  final List<Movie> movies;
+  final String? title;
+  final String? subTitle;
+  final VoidCallback? loadNextPage;
+
+  const MovieHorizontalListview({
+    super.key, 
+    required this.movies, 
+    this.title, 
+    this.subTitle, 
+    this.loadNextPage
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Placeholder();
+  }
+}
+```
+
+- Ahora agregamos ese `MovieHorizontalListview` al `home_screen.dart`
+
+```
+@override
+  Widget build(BuildContext context) {
+
+    final nowPlayingMovies = ref.watch( nowPlayingMoviesProvider );
+    final slideShowMovies = ref.watch(moviesSlideshowProvider);
+
+    return Column(
+      children: [
+
+        const CustomAppbar(),
+
+        MoviesSlideshow(movies: slideShowMovies),
+
+        MovieHorizontalListview(
+          movies: nowPlayingMovies,
+          title: 'En Cine',
+          subTitle: 'Lunes 20',
+        ),
+      ]
+    );
+  }
+```
+
+- Ahora vamos a agregar el titulo y subtitulo al `MovieHorizontalListview`, creanndo el widget `_Title`
+
+```
+import 'package:flutter/material.dart';
+import '../../../domain/entities/movie.dart';
+
+class MovieHorizontalListview extends StatelessWidget {
+
+  // Propiedades
+  final List<Movie> movies;
+  final String? title;
+  final String? subTitle;
+  final VoidCallback? loadNextPage;
+
+  const MovieHorizontalListview({
+    super.key, 
+    required this.movies, 
+    this.title, 
+    this.subTitle, 
+    this.loadNextPage
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.red,
+      child: SizedBox(
+        height: 350,
+        child: Column(
+          children: [
+
+            if ( title != null || subTitle != null )
+            _Title(title: title, subTitle: subTitle,)
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Title extends StatelessWidget {
+
+  final String? title;
+  final String? subTitle; 
+
+  const _Title({
+    this.title, 
+    this.subTitle
+  });
+
+  @override
+  Widget build(BuildContext context) {
+
+    final titleStyle = Theme.of(context).textTheme.titleLarge;
+
+    return Container(
+      padding: const EdgeInsets.only(top: 10),
+      color: Colors.blue,
+      margin: const EdgeInsets.symmetric(horizontal: 10),
+      child: Row(
+        children: [
+
+          if ( title !=  null )
+            Text(title!, style: titleStyle),
+
+          const Spacer(),
+
+          if ( subTitle !=  null )
+            FilledButton(
+              style: const ButtonStyle(visualDensity: VisualDensity.compact),
+              onPressed: (){}, 
+              child: Text(subTitle!),
+            )
+            
+        ],
+      ),
+    );
+  }
+}
+```
+
+####  - Mostrar peliculas en el Movie Horizontal ListView -
+
+- Creamos el widget `_Slide` creamos  `Imagen, Title, Rating`, en el `MovieHorizontalListview`, y removemos los constainer que usamos para el diseño, agregamos el código:
+
+```
+
+
+import 'package:animate_do/animate_do.dart';
+import 'package:flutter/material.dart';
+import '../../../domain/entities/movie.dart';
+
+class MovieHorizontalListview extends StatelessWidget {
+
+  // Propiedades
+  final List<Movie> movies;
+  final String? title;
+  final String? subTitle;
+  final VoidCallback? loadNextPage;
+
+  const MovieHorizontalListview({
+    super.key, 
+    required this.movies, 
+    this.title, 
+    this.subTitle, 
+    this.loadNextPage
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 350,
+      child: Column(
+        children: [
+
+          if ( title != null || subTitle != null )
+          _Title(title: title, subTitle: subTitle),
+
+          Expanded(
+            child: ListView.builder(
+              itemCount: movies.length,
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemBuilder: (context, index) {
+                return _Slide( movie: movies[index]);
+              },
+            )
+          )
+
+
+        ],
+      ),
+    );
+  }
+}
+
+// Widget _Slide
+class _Slide extends StatelessWidget {
+
+  final Movie movie;
+
+  const _Slide({required this.movie});
+
+  @override
+  Widget build(BuildContext context) {
+
+    final textStyles = Theme.of(context).textTheme;
+
+    return Container(
+      // color: Colors.yellow,
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          // * Imagen
+          SizedBox(
+            width: 150,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Image.network(
+                movie.posterPath,
+                fit: BoxFit.cover,
+                width: 150,
+                loadingBuilder: (context, child, loadingProgress) {
+                  
+                  if ( loadingProgress != null ) {
+                    return const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Center( child: CircularProgressIndicator(strokeWidth: 2)),
+                    );
+                  }
+
+                  return FadeIn(child: child);
+                },
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 5),
+
+          // * Title
+          SizedBox(
+            width: 150,
+            child: Text(
+              movie.title,
+              maxLines: 2,
+              style: textStyles.titleSmall,
+            ),
+          ),
+
+          // * Rating
+          Row(
+            children: [
+              Icon(Icons.star_half_outlined, color: Colors.yellow.shade800),
+              const SizedBox(width: 3),
+              Text('${ movie.voteAverage }', style: textStyles.bodyMedium?.copyWith( color: Colors.yellow.shade800)),
+              const SizedBox(width: 10),
+              Text('${ movie.popularity }', style: textStyles.bodySmall),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+}
+
+// Widget _Title
+class _Title extends StatelessWidget {
+
+  final String? title;
+  final String? subTitle; 
+
+  const _Title({
+    this.title, 
+    this.subTitle
+  });
+
+  @override
+  Widget build(BuildContext context) {
+
+    final titleStyle = Theme.of(context).textTheme.titleLarge;
+
+    return Container(
+      padding: const EdgeInsets.only(top: 10),
+      // color: Colors.blue,
+      margin: const EdgeInsets.symmetric(horizontal: 10),
+      child: Row(
+        children: [
+
+          if ( title !=  null )
+            Text(title!, style: titleStyle),
+
+          const Spacer(),
+
+          if ( subTitle !=  null )
+            FilledButton(
+              style: const ButtonStyle(visualDensity: VisualDensity.compact),
+              onPressed: (){}, 
+              child: Text(subTitle!),
+            )
+            
+        ],
+      ),
+    );
+  }
+}
+```
+
+####  - HummanFormats - Numeros cortos -
+Documentación: https://pub.dev/packages/intl
+
+- Instalamos la libreria `intl`
+- Dentro de la carpeta `config` creamos la carpeta `helpers`
+- Dentro de la carpeta `helpers`, creo el archivo `human_formats.dart`
+- Agregamos el código:
+```
+import 'package:intl/intl.dart';
+
+class HumanFormats {
+
+  static String number ( double number ) {
+
+    final formattedNumber = NumberFormat.compactCurrency(
+      decimalDigits: 0,
+      symbol: '',
+      locale: 'en'
+    ).format(number);
+
+    return formattedNumber;
+  }
+}
+```
+
+- Ahora lo usamos en el Rating, con el siguiente código en el `MovieHorizontalListview`
+
+```
+ // * Rating
+  SizedBox(
+    width: 150,
+    child: Row(
+      children: [
+        Icon(Icons.star_half_outlined, color: Colors.yellow.shade800),
+        const SizedBox(width: 3),
+        Text('${ movie.voteAverage }', style: textStyles.bodyMedium?.copyWith( color: Colors.yellow.shade800)),
+        const Spacer(),
+        Text(HumanFormats.number(movie.popularity), style: textStyles.bodySmall),
+      ],
+    ),
+  )
+```
+
+####  - InfiniteScroll Horizontal -
+
+- Vamos a cambiar el widget `MovieHorizontalListview` de `StatelessWidget` a `StatefulWidget`, ya que vamos a agregar un listener.
+
+- Agregamos el `initState()`, `dispose()` y el `final scrollController = ScrollController();`
+
+```
+// * El controller es como la barrita de youtube, que se puede saber cuando esta en pausa,
+  // * cuando se esta al final del video etc.
+  final scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+
+    scrollController.addListener(() {
+      if ( widget.loadNextPage == null ) return;
+
+      if ( (scrollController.position.pixels + 200) >= scrollController.position.maxScrollExtent  ) {
+        print('Load next movier');
+
+        widget.loadNextPage!();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    scrollController.dispose();
+    super.dispose();
+  }
+```
+
+- Luego asociamos el ListView.Builder con el controller `controller: scrollController, //* Asociamos el controller del ListView al listener`
+
+```
+ Expanded(
+    child: ListView.builder(
+      controller: scrollController, //* Asociamos el controller del ListView al listener
+      itemCount: widget.movies.length,
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      itemBuilder: (context, index) {
+        return _Slide( movie: widget.movies[index]);
+      },
+    )
+  )
+```
+
+- Y en el `home_screen.dart` agregamos `loadNextPage` :
+```
+MovieHorizontalListview(
+  movies: nowPlayingMovies,
+  title: 'En Cine',
+  subTitle: 'Lunes 20',
+  loadNextPage: () {print('Llamado del padre');},
+),
+```
+
+####  - Evitar peticiones simultaneas -
+
+- Obtimizamos el archivo `movies_providers.dart`, que se encuentre en la carpeta `presentation -> providers -> movies`
+
+- Agregamos el código:
+```
+
+
+import 'package:cinemapedia/presentation/providers/movies/movies_repository_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cinemapedia/domain/entities/movie.dart';
+
+
+// Cuando necesite saber cuales paliculas o movies hay en el cine.
+// consulto este provider => nowPlayingMoviesProvider
+final nowPlayingMoviesProvider = StateNotifierProvider<MoviesNotifier, List<Movie>>((ref) {
+
+  final fetcMoreMovies = ref.watch( movieRepositoryProvider ).getNowPlaying;
+
+  return MoviesNotifier(
+    fetchMoreMovies: fetcMoreMovies
+  );
+});
+
+// Definir el tipo de función que espero
+// definir el caso de uso, 
+typedef MovieCallback = Future<List<Movie>> Function({ int page });
+
+
+// El MoviesNotifier el objetivo es que proporcione el listado de movies
+class MoviesNotifier extends StateNotifier<List<Movie>> {
+
+  // Propiedades
+  int currentPage = 0;
+  bool isLoading = false;
+  MovieCallback fetchMoreMovies;
+
+  MoviesNotifier({
+    required this.fetchMoreMovies,
+  }): super([]);
+
+  // Metodos
+  Future<void> loadNextPage() async {
+    if ( isLoading ) return;
+    isLoading = true;
+
+    currentPage++;
+    final List<Movie> movies = await fetchMoreMovies( page: currentPage );
+    state = [...state, ...movies];
+    
+    await Future.delayed(const Duration(milliseconds: 300));
+    isLoading = false;
+  }
+
+}
+```
+
+####  - SingleChildScrollView y CustomScrollView -
+
+- Para mostrar todas las `MovieHorizontalListview` de populare, proximamente, y mejor calificadas, envolvemos el widget `Column()` en un `SingleChildScrollView` y de esa forma se muestra todos los `MovieHorizontalListview`
+
+- el código queddaria asi:
+```
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../providers/providers.dart';
+
+
+class HomeScreen extends StatelessWidget {
+
+  static const name = 'home-screen';
+
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: _HomeView(),
+      ),
+      bottomNavigationBar: CustomBottomNavigation(),
+    );
+  }
+}
+
+class _HomeView extends ConsumerStatefulWidget {
+  const _HomeView();
+
+  @override
+  _HomeViewState createState() => _HomeViewState();
+}
+
+class _HomeViewState extends ConsumerState<_HomeView> {
+
+  @override
+  void initState() {
+    super.initState();
+
+    ref.read( nowPlayingMoviesProvider.notifier ).loadNextPage();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+
+    final nowPlayingMovies = ref.watch( nowPlayingMoviesProvider );
+    final slideShowMovies = ref.watch(moviesSlideshowProvider);
+
+    return CustomScrollView(
+      slivers: [
+
+        const SliverAppBar(
+          floating: true,
+          flexibleSpace: FlexibleSpaceBar(
+            title: CustomAppbar(),
+          ),
+        ),
+
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              return Column(
+                children: [
+            
+                  // const CustomAppbar(),
+            
+                  MoviesSlideshow(movies: slideShowMovies),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'En Cine',
+                    subTitle: 'Lunes 20',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'Proximamente',
+                    subTitle: 'En este mes',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'Populares',
+                    // subTitle: 'En este mes',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'Mejor calificadas',
+                    subTitle: 'Desde siempre',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+                ]
+              );
+            },
+            childCount: 1,
+          )
+        )
+      ],
+    );
+  }
+}
+```
+
+- Ahora vamos a utilizar el `CustomScrollView` y los `slivers` y el código quedaria asi:
+
+- Quitamos el `const CustomAppbar()` y lo sustituimos por un `SliverAppBar`
+
+```
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../providers/providers.dart';
+
+
+class HomeScreen extends StatelessWidget {
+
+  static const name = 'home-screen';
+
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: _HomeView(),
+      ),
+      bottomNavigationBar: CustomBottomNavigation(),
+    );
+  }
+}
+
+class _HomeView extends ConsumerStatefulWidget {
+  const _HomeView();
+
+  @override
+  _HomeViewState createState() => _HomeViewState();
+}
+
+class _HomeViewState extends ConsumerState<_HomeView> {
+
+  @override
+  void initState() {
+    super.initState();
+
+    ref.read( nowPlayingMoviesProvider.notifier ).loadNextPage();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+
+    final nowPlayingMovies = ref.watch( nowPlayingMoviesProvider );
+    final slideShowMovies = ref.watch(moviesSlideshowProvider);
+
+    return CustomScrollView(
+      slivers: [
+
+        const SliverAppBar(
+          floating: true,
+          flexibleSpace: FlexibleSpaceBar(
+            title: CustomAppbar(),
+          ),
+        ),
+
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              return Column(
+                children: [
+            
+                  // const CustomAppbar(),
+            
+                  MoviesSlideshow(movies: slideShowMovies),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'En Cine',
+                    subTitle: 'Lunes 20',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'Proximamente',
+                    subTitle: 'En este mes',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'Populares',
+                    // subTitle: 'En este mes',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'Mejor calificadas',
+                    subTitle: 'Desde siempre',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+                ]
+              );
+            },
+            childCount: 1,
+          )
+        )
+      ],
+    );
+  }
+}
+```
