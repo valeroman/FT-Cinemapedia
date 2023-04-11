@@ -1387,7 +1387,7 @@ class MovieHorizontalListview extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
               itemBuilder: (context, index) {
-                return _Slide( movie: movies[index]);
+                return FadeInRight(child: _Slide( movie: widget.movies[index]));
               },
             )
           )
@@ -1919,3 +1919,800 @@ class _HomeViewState extends ConsumerState<_HomeView> {
   }
 }
 ```
+
+####  - Obtener peliculas populares -
+
+- Vamos al archivo `movies_datasource.dart`, que se encuentra en 'domain -> datasources`.
+- Agregamos `getPopular`, el código quedaria asi:
+
+```
+import '../entities/movie.dart';
+
+abstract class MoviesDatasource {
+
+  Future<List<Movie>> getNowPlaying({ int page = 1 });
+
+  Future<List<Movie>> getPopular({ int page = 1 });
+}
+```
+- Tambien agregamos `getPopular`, en el archivo `movies_repository.dart` que se encuentra en la carpeta `domain -> repositories` y agregamos el sigueinte código:
+
+```
+import '../entities/movie.dart';
+
+abstract class MoviesRepository {
+
+  Future<List<Movie>> getNowPlaying({ int page = 1 });
+
+  Future<List<Movie>> getPopular({ int page = 1 });
+
+}
+```
+
+- Ahora vamos a resolver el problema en el archivo `moviedb_datasource.dart`, que se encuentra en la carpeta `infrastructure -> datasources`
+
+- Modificamos el archivo con el siguiente código:
+
+```
+import 'package:cinemapedia/config/constants/environment.dart';
+import 'package:cinemapedia/domain/datasources/movies_datasource.dart';
+import 'package:cinemapedia/domain/entities/movie.dart';
+import 'package:cinemapedia/infrastructure/mappers/movie_mapper.dart';
+import 'package:cinemapedia/infrastructure/models/moviedb/moviedb_response.dart';
+import 'package:dio/dio.dart';
+
+class MoviedbDatasource extends MoviesDatasource {
+
+    // Propiedades de la clase MoviedbDatasource
+    final dio = Dio(BaseOptions(
+      baseUrl: 'https://api.themoviedb.org/3',
+      queryParameters: {
+        'api_key': Environment.theMovieDbKey,
+        'language': 'es-ES' // es-MX
+      }
+    ));
+
+    List<Movie> _jsonToMovies( Map<String, dynamic> json ) {
+
+      final movieDBResponse = MovieDbResponse.fromJson(json);
+
+      // El where => nos ayuda a filtrar si no tenemos imagen del poster, no se crea la movie
+      final List<Movie> movies = movieDBResponse.results
+      .where((moviedb) => moviedb.posterPath != 'no-poster')
+      .map(
+        (moviedb) => MovieMapper.movieDBToEntity(moviedb)
+      ).toList();
+
+      return movies;  
+
+    }
+
+
+  @override
+  Future<List<Movie>> getNowPlaying({int page = 1}) async {
+
+    final response = await dio.get('/movie/now_playing',
+      queryParameters: {
+        'page': page
+      }
+    );
+
+    return _jsonToMovies(response.data);
+  }
+  
+  @override
+  Future<List<Movie>> getPopular({int page = 1}) async {
+
+    final response = await dio.get('/movie/popular',
+      queryParameters: {
+        'page': page
+      }
+    );
+
+   return _jsonToMovies(response.data);
+  
+  }
+}
+```
+
+- Ahora vamos a resolver el problema en el archivo `movie_repository_impl.dart`, que se encuentra en la carpeta `infrastructure -> repositories`
+
+- Modificamos el archivo con el siguiente código:
+
+```
+import 'package:cinemapedia/domain/entities/movie.dart';
+import 'package:cinemapedia/domain/repositories/movies_repository.dart';
+
+import '../../domain/datasources/movies_datasource.dart';
+
+class MovieRepositoryImpl extends MoviesRepository {
+  
+  // Llamamos al datasource
+  final MoviesDatasource datasource;
+  MovieRepositoryImpl(this.datasource);
+
+  @override
+  Future<List<Movie>> getNowPlaying({int page = 1}) {
+    return datasource.getNowPlaying(page: page);
+  }
+  
+  @override
+  Future<List<Movie>> getPopular({int page = 1}) {
+    return datasource.getPopular(page: page);
+  }
+
+}
+```
+
+- Ahora nos vamos al archivo `movies_providers.dart`, que se encuentra en la carpeta `presentation -> providers -> movies` y agregamos el siguiente codigo:
+
+- Copiamos la misma funcion y la sustituimos
+
+```
+final popularMoviesProvider = StateNotifierProvider<MoviesNotifier, List<Movie>>((ref) {
+  final fetcMoreMovies = ref.watch( movieRepositoryProvider ).getPopular;
+  return MoviesNotifier(
+    fetchMoreMovies: fetcMoreMovies
+  );
+});
+
+```
+
+- Ahora vamos al `home_screen.dart`
+
+- Agregamos el siguiente código:
+
+```
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../providers/providers.dart';
+
+
+class HomeScreen extends StatelessWidget {
+
+  static const name = 'home-screen';
+
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: _HomeView(),
+      ),
+      bottomNavigationBar: CustomBottomNavigation(),
+    );
+  }
+}
+
+class _HomeView extends ConsumerStatefulWidget {
+  const _HomeView();
+
+  @override
+  _HomeViewState createState() => _HomeViewState();
+}
+
+class _HomeViewState extends ConsumerState<_HomeView> {
+
+  @override
+  void initState() {
+    super.initState();
+
+    ref.read( nowPlayingMoviesProvider.notifier ).loadNextPage();
+    ref.read( popularMoviesProvider.notifier ).loadNextPage();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+
+    final nowPlayingMovies = ref.watch( nowPlayingMoviesProvider );
+    final slideShowMovies = ref.watch(moviesSlideshowProvider);
+    final popularMovies = ref.watch( popularMoviesProvider );
+
+    return CustomScrollView(
+      slivers: [
+
+        const SliverAppBar(
+          floating: true,
+          flexibleSpace: FlexibleSpaceBar(
+            title: CustomAppbar(),
+          ),
+        ),
+
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              return Column(
+                children: [
+            
+                  // const CustomAppbar(),
+            
+                  MoviesSlideshow(movies: slideShowMovies),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'En Cine',
+                    subTitle: 'Lunes 20',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'Proximamente',
+                    subTitle: 'En este mes',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: popularMovies,
+                    title: 'Populares',
+                    // subTitle: 'En este mes',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(popularMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'Mejor calificadas',
+                    subTitle: 'Desde siempre',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+                ]
+              );
+            },
+            childCount: 1,
+          )
+        )
+      ],
+    );
+  }
+}
+```
+
+####  - Obtener peliculas mejores calificadar y proximamente -
+
+- Vamos al archivo `movies_datasource.dart`, que se encuentra en 'domain -> datasources`.
+- Agregamos `getUpcoming` y `getTopRated`, el código quedaria asi:
+
+```
+import '../entities/movie.dart';
+
+abstract class MoviesDatasource {
+
+  Future<List<Movie>> getNowPlaying({ int page = 1 });
+
+  Future<List<Movie>> getPopular({ int page = 1 });
+
+  Future<List<Movie>> getUpcoming({ int page = 1 });
+
+  Future<List<Movie>> getTopRated({ int page = 1 });
+}
+```
+- Tambien agregamos `getUpcoming` y `getTopRated`, en el archivo `movies_repository.dart` que se encuentra en la carpeta `domain -> repositories` y agregamos el siguiente código:
+
+```
+import '../entities/movie.dart';
+
+abstract class MoviesRepository {
+
+  Future<List<Movie>> getNowPlaying({ int page = 1 });
+
+  Future<List<Movie>> getPopular({ int page = 1 });
+
+  Future<List<Movie>> getUpcoming({ int page = 1 });
+
+  Future<List<Movie>> getTopRated({ int page = 1 });
+
+}
+```
+
+- Ahora vamos a resolver el problema en el archivo `moviedb_datasource.dart`, que se encuentra en la carpeta `infrastructure -> datasources`
+
+- Modificamos el archivo con el siguiente código:
+
+```
+import 'package:cinemapedia/config/constants/environment.dart';
+import 'package:cinemapedia/domain/datasources/movies_datasource.dart';
+import 'package:cinemapedia/domain/entities/movie.dart';
+import 'package:cinemapedia/infrastructure/mappers/movie_mapper.dart';
+import 'package:cinemapedia/infrastructure/models/moviedb/moviedb_response.dart';
+import 'package:dio/dio.dart';
+
+class MoviedbDatasource extends MoviesDatasource {
+
+    // Propiedades de la clase MoviedbDatasource
+    final dio = Dio(BaseOptions(
+      baseUrl: 'https://api.themoviedb.org/3',
+      queryParameters: {
+        'api_key': Environment.theMovieDbKey,
+        'language': 'es-ES' // es-MX
+      }
+    ));
+
+    List<Movie> _jsonToMovies( Map<String, dynamic> json ) {
+
+      final movieDBResponse = MovieDbResponse.fromJson(json);
+
+      // El where => nos ayuda a filtrar si no tenemos imagen del poster, no se crea la movie
+      final List<Movie> movies = movieDBResponse.results
+      .where((moviedb) => moviedb.posterPath != 'no-poster')
+      .map(
+        (moviedb) => MovieMapper.movieDBToEntity(moviedb)
+      ).toList();
+
+      return movies;  
+
+    }
+
+
+  @override
+  Future<List<Movie>> getNowPlaying({int page = 1}) async {
+
+    final response = await dio.get('/movie/now_playing',
+      queryParameters: {
+        'page': page
+      }
+    );
+
+    return _jsonToMovies(response.data);
+  }
+  
+  @override
+  Future<List<Movie>> getPopular({int page = 1}) async {
+
+    final response = await dio.get('/movie/popular',
+      queryParameters: {
+        'page': page
+      }
+    );
+
+   return _jsonToMovies(response.data);
+  
+  }
+
+  @override
+  Future<List<Movie>> getTopRated({int page = 1}) async {
+   final response = await dio.get('/movie/top_rated',
+      queryParameters: {
+        'page': page
+      }
+    );
+
+   return _jsonToMovies(response.data);
+  }
+  
+  @override
+  Future<List<Movie>> getUpcoming({int page = 1}) async {
+    final response = await dio.get('/movie/upcoming',
+      queryParameters: {
+        'page': page
+      }
+    );
+
+   return _jsonToMovies(response.data);
+  }
+}
+```
+
+- Ahora vamos a resolver el problema en el archivo `movie_repository_impl.dart`, que se encuentra en la carpeta `infrastructure -> repositories`
+
+- Modificamos el archivo con el siguiente código:
+
+```
+import 'package:cinemapedia/domain/entities/movie.dart';
+import 'package:cinemapedia/domain/repositories/movies_repository.dart';
+
+import '../../domain/datasources/movies_datasource.dart';
+
+class MovieRepositoryImpl extends MoviesRepository {
+  
+  // Llamamos al datasource
+  final MoviesDatasource datasource;
+  MovieRepositoryImpl(this.datasource);
+
+  @override
+  Future<List<Movie>> getNowPlaying({int page = 1}) {
+    return datasource.getNowPlaying(page: page);
+  }
+  
+  @override
+  Future<List<Movie>> getPopular({int page = 1}) {
+    return datasource.getPopular(page: page);
+  }
+
+   @override
+  Future<List<Movie>> getTopRated({int page = 1}) {
+    return datasource.getTopRated(page: page);
+  }
+  
+  @override
+  Future<List<Movie>> getUpcoming({int page = 1}) {
+    return datasource.getUpcoming(page: page);
+  }
+
+}
+```
+
+- Ahora nos vamos al archivo `movies_providers.dart`, que se encuentra en la carpeta `presentation -> providers -> movies` y agregamos el siguiente codigo:
+
+- Copiamos la misma funcion y la sustituimos
+
+```
+final popularMoviesProvider = StateNotifierProvider<MoviesNotifier, List<Movie>>((ref) {
+  final fetcMoreMovies = ref.watch( movieRepositoryProvider ).getPopular;
+  return MoviesNotifier(
+    fetchMoreMovies: fetcMoreMovies
+  );
+});
+
+final topRatedMoviesProvider = StateNotifierProvider<MoviesNotifier, List<Movie>>((ref) {
+  final fetcMoreMovies = ref.watch( movieRepositoryProvider ).getTopRated;
+  return MoviesNotifier(
+    fetchMoreMovies: fetcMoreMovies
+  );
+});
+
+final upcomingMoviesProvider = StateNotifierProvider<MoviesNotifier, List<Movie>>((ref) {
+  final fetcMoreMovies = ref.watch( movieRepositoryProvider ).getUpcoming;
+  return MoviesNotifier(
+    fetchMoreMovies: fetcMoreMovies
+  );
+});
+
+```
+
+- Ahora vamos al `home_screen.dart`
+
+- Agregamos el siguiente código:
+
+```
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../providers/providers.dart';
+
+
+class HomeScreen extends StatelessWidget {
+
+  static const name = 'home-screen';
+
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: _HomeView(),
+      ),
+      bottomNavigationBar: CustomBottomNavigation(),
+    );
+  }
+}
+
+class _HomeView extends ConsumerStatefulWidget {
+  const _HomeView();
+
+  @override
+  _HomeViewState createState() => _HomeViewState();
+}
+
+class _HomeViewState extends ConsumerState<_HomeView> {
+
+  @override
+  void initState() {
+    super.initState();
+
+    ref.read( nowPlayingMoviesProvider.notifier ).loadNextPage();
+    ref.read( popularMoviesProvider.notifier ).loadNextPage();
+    ref.read( topRatedMoviesProvider.notifier ).loadNextPage();
+    ref.read( upcomingMoviesProvider.notifier ).loadNextPage();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+
+    final nowPlayingMovies = ref.watch( nowPlayingMoviesProvider );
+    final slideShowMovies = ref.watch(moviesSlideshowProvider);
+    final popularMovies = ref.watch( popularMoviesProvider );
+    final topRatedMovies = ref.watch( topRatedMoviesProvider );
+    final upcomingMovies = ref.watch( upcomingMoviesProvider );
+
+    return CustomScrollView(
+      slivers: [
+
+        const SliverAppBar(
+          floating: true,
+          flexibleSpace: FlexibleSpaceBar(
+            title: CustomAppbar(),
+          ),
+        ),
+
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              return Column(
+                children: [
+            
+                  // const CustomAppbar(),
+            
+                  MoviesSlideshow(movies: slideShowMovies),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'En Cine',
+                    subTitle: 'Lunes 20',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: upcomingMovies,
+                    title: 'Proximamente',
+                    subTitle: 'En este mes',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(upcomingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: popularMovies,
+                    title: 'Populares',
+                    // subTitle: 'En este mes',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(popularMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: topRatedMovies,
+                    title: 'Mejor calificadas',
+                    subTitle: 'Desde siempre',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(topRatedMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+                ]
+              );
+            },
+            childCount: 1,
+          )
+        )
+      ],
+    );
+  }
+}
+```
+
+####  - FullScreenLoader -
+
+- Creamos el archivo `full_screen_loader.dart`, en la carpeta `presentation -> widgets ->shared`
+
+- Agregamos el siguiente código:
+
+```
+import 'package:flutter/material.dart';
+
+class FullScreenLoader extends StatelessWidget {
+  const FullScreenLoader({super.key});
+
+  Stream<String> getLoadingMessages() {
+
+    final messages = <String>[
+      'Cargando películas',
+      'Comprando palomitas de Maiz',
+      'Cargando populares',
+      'Llamando a Carola',
+      'Ya casi...',
+      'Esto está tardando más de lo esperado :(',
+    ];
+
+    return Stream.periodic( const Duration(milliseconds: 1200), (step) {
+      return messages[step];
+    }).take(messages.length);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('Espere por favor'),
+          const SizedBox(height: 10),
+          const CircularProgressIndicator(strokeWidth: 2),
+          const SizedBox(height: 10),
+
+          StreamBuilder(
+            stream: getLoadingMessages(),
+            builder: (context, snapshot) {
+              if ( !snapshot.hasData) return const Text('Cargando...');
+
+              return Text( snapshot.data! );
+            },
+          )
+        ],
+      ),
+    );
+  }
+}
+```
+
+####  - Escuchar multiples provider simultáneamente -
+
+- Se crea el archivo `initial_loading_provider.dart`, en la carpeta `presentation -> providers -> movies`.
+
+- Se agrega el siguiente código:
+
+```
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../providers.dart';
+
+final initialLoadingProvider = Provider<bool>((ref) {
+
+  final step1 = ref.watch(moviesSlideshowProvider).isEmpty;
+  final step2 = ref.watch( popularMoviesProvider ).isEmpty;
+  final step3 = ref.watch( topRatedMoviesProvider ).isEmpty;
+  final step4 = ref.watch( upcomingMoviesProvider ).isEmpty;
+
+  if ( step1 || step2 || step3 || step4 ) return true;
+  
+  return false; // terminamos de cargar
+
+});
+```
+
+- En el `home_screen.dart` agregamos `initialLoadingProvider` y el siguiente código:
+
+```
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../providers/providers.dart';
+
+
+class HomeScreen extends StatelessWidget {
+
+  static const name = 'home-screen';
+
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: _HomeView(),
+      ),
+      bottomNavigationBar: CustomBottomNavigation(),
+    );
+  }
+}
+
+class _HomeView extends ConsumerStatefulWidget {
+  const _HomeView();
+
+  @override
+  _HomeViewState createState() => _HomeViewState();
+}
+
+class _HomeViewState extends ConsumerState<_HomeView> {
+
+  @override
+  void initState() {
+    super.initState();
+
+    ref.read( nowPlayingMoviesProvider.notifier ).loadNextPage();
+    ref.read( popularMoviesProvider.notifier ).loadNextPage();
+    ref.read( topRatedMoviesProvider.notifier ).loadNextPage();
+    ref.read( upcomingMoviesProvider.notifier ).loadNextPage();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+
+    final initialLoading = ref.watch( initialLoadingProvider );
+    if ( initialLoading ) return const FullScreenLoader();
+
+    final nowPlayingMovies = ref.watch( nowPlayingMoviesProvider );
+    final slideShowMovies = ref.watch(moviesSlideshowProvider);
+    final popularMovies = ref.watch( popularMoviesProvider );
+    final topRatedMovies = ref.watch( topRatedMoviesProvider );
+    final upcomingMovies = ref.watch( upcomingMoviesProvider );
+
+    return CustomScrollView(
+      slivers: [
+
+        const SliverAppBar(
+          floating: true,
+          flexibleSpace: FlexibleSpaceBar(
+            title: CustomAppbar(),
+          ),
+        ),
+
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              return Column(
+                children: [
+            
+                  // const CustomAppbar(),
+            
+                  MoviesSlideshow(movies: slideShowMovies),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'En Cine',
+                    subTitle: 'Lunes 20',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: upcomingMovies,
+                    title: 'Proximamente',
+                    subTitle: 'En este mes',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(upcomingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: popularMovies,
+                    title: 'Populares',
+                    // subTitle: 'En este mes',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(popularMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: topRatedMovies,
+                    title: 'Mejor calificadas',
+                    subTitle: 'Desde siempre',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(topRatedMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+                ]
+              );
+            },
+            childCount: 1,
+          )
+        )
+      ],
+    );
+  }
+}
+```
+
