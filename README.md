@@ -4130,3 +4130,111 @@ FadeInRight(
 ),
 
 ```
+
+### SearchDelegate - Busquedas
+
+#### Datasource y Repository - SearchMovies
+
+- Vamos a la carpeta `domain -> datasources`, abrimos el archivo `movies_datasources.dart` y agregamos el `searchMovies`
+
+```
+Future<List<Movie>> searchMovies( String query );
+```
+
+- Vamos a la carpeta `domain -> repositories`, abrimos el archivo `movies_repository.dart` y agregamos el `searchMovies`
+
+```
+Future<List<Movie>> searchMovies( String query );
+```
+
+- Ahora vamos a hacer la implementación de la busqueda en el datasources, para eso vamos al archivo `moviedb_datasoruce.dart`, en la carpeta `infrastructure -> datasources`.
+
+```
+@override
+Future<List<Movie>> searchMovies(String query) async {
+  
+  final response = await dio.get('/search/movie',
+    queryParameters: {
+      'query': query
+    }
+  );
+
+  return _jsonToMovies(response.data);
+}
+```
+
+- Vamos a hacer la implementación de la busqueda en el repositories, para eso vamos al archivo `movie_repository_impl.dart`, en la carpeta `infrastructure -> repositories`.
+
+```
+@override
+Future<List<Movie>> searchMovies(String query) {
+  return datasource.searchMovies(query);
+}
+```
+
+#### SearchDelegate
+
+- Vamos al archivo `custom_appbar.dart`, que se encuentra en la carpeta `presentation -> widgets -> shared`, ahi buscamos el icono de la lupita y en el `onPressed` agregamos lo siguiente:
+```
+onPressed: (){
+  showSearch(
+    context: context, 
+    delegate: delegate
+  );
+}, 
+```
+
+- El delegate es el encargado de trabajar la busqueda y creamos una carpeta llamada `delegates`, en `presentation` y creamos el archivo `search_movie_delegate.dart`.
+
+- Agregamos el siguiente código, para saber como funcionan cada una de sus metodos de la clase  `SearchMovieDelegate`
+
+```
+import 'package:flutter/material.dart';
+
+class SearchMovieDelegate extends SearchDelegate {
+
+  @override
+  List<Widget>? buildActions(BuildContext context) {
+    return [
+      const Text('buildActions')
+    ];
+  }
+
+  @override
+  Widget? buildLeading(BuildContext context) {
+    return const Text('buildLeading');
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    return const Text('buildResults');
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    return const Text('buildSuggestions');
+  }
+
+}
+```
+
+- Ahora agregamos `SearchMovieDelegate` a la función `onPress`, en el archivo `custom_appbar.dart`
+
+```
+ IconButton(
+  onPressed: (){
+    showSearch(
+      context: context, 
+      delegate: SearchMovieDelegate()
+    );
+  }, 
+  icon: const Icon(Icons.search)
+)
+```
+
+- Ahora gregamos un  nuevo metodo en el `search_movie_deletage.dart`, para sustituir la palabre `Search`, por `Buscar película`
+
+```
+@override
+  String get searchFieldLabel => 'Buscar película';
+```
