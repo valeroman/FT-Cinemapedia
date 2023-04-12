@@ -2716,3 +2716,1417 @@ class _HomeViewState extends ConsumerState<_HomeView> {
 }
 ```
 
+### Peliculas Individuales y Actores:
+
+#### Navegar a otra pantalla con parametros
+
+- Creamos un nnuevo archivo `movie_screen.dart`, en la carpeta `presentattion -> screens -> movies`
+
+```
+import 'package:flutter/material.dart';
+
+class MovieScreen extends StatelessWidget {
+
+  static const name = 'movie-screen';
+
+  final String movieId;
+
+  const MovieScreen({
+    super.key, 
+    required this.movieId
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('MovieId: $movieId'),
+      ),
+    );
+  }
+}
+```
+
+- en el archivo `app_router.dart`, que se encuentra en la carpeta `config -> router`, agregamos un nuevo `Go_Route`.
+
+- El `id` que recibo siempre va a hacer string, para obtener el id usamos el `final movieId = state.params['id'] ?? 'no-id';`, los `querys parameters y los segmentos de url` siempre van a hacer string.
+
+```
+GoRoute(
+  path: '/movie/:id',
+  name: MovieScreen.name,
+  builder: (context, state) {
+    final movieId = state.params['id'] ?? 'no-id';
+    return MovieScreen(movieId: movieId);
+  },
+),
+```
+
+- Ahora abrimos el archivo `movie_horizontal_listview.dart` y buscamos en donde tenemos las imagenes para que al tocar la imagen nos lleve a la siguiente pantalla y le pasamos el movieId como parametro, para hacer eso agregamos el `GestureDetector` el siguiente código:
+
+```
+// * Imagen
+SizedBox(
+  width: 150,
+  child: ClipRRect(
+    borderRadius: BorderRadius.circular(20),
+    child: Image.network(
+      movie.posterPath,
+      fit: BoxFit.cover,
+      width: 150,
+      loadingBuilder: (context, child, loadingProgress) {
+        
+        if ( loadingProgress != null ) {
+          return const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Center( child: CircularProgressIndicator(strokeWidth: 2)),
+          );
+        }
+
+        return GestureDetector(
+          onTap: () => context.push('/movie/${ movie.id }'),
+          child: FadeIn(child: child),
+        );
+        
+      },
+    ),
+  ),
+),
+```
+
+- Ahora necitamos configurar el archiv `app_router.dart`, ya que si vamos a usar deep linking, para navegar a otra pantalla y compartir el link, no queremos que desaparezca el boton del back para regresar al home, para ellos realizamos los siguientes cambios:
+
+- Al la ruta principal que es el `home_screen`, le definimos los `routes`, que son conicidos como rutas hijas y agregamos la ruta del `movie/:id` , el código seria asi:
+
+```
+import 'package:cinemapedia/presentation/screens/screens.dart';
+import 'package:go_router/go_router.dart';
+
+final appRouter = GoRouter(
+  initialLocation: '/',
+  routes: [
+
+    GoRoute(
+      path: '/',
+      name: HomeScreen.name,
+      builder: (context, state) => const HomeScreen(),
+      routes: [
+        GoRoute(
+          path: 'movie/:id',
+          name: MovieScreen.name,
+          builder: (context, state) {
+            final movieId = state.params['id'] ?? 'no-id';
+            return MovieScreen(movieId: movieId);
+          },
+        ),
+      ]
+    ),
+  ]
+);
+```
+#### Obtener películas por ID - Datasource
+
+- Abrimos el archivo `movies_datasource.dart`, que se encuentra en la carpeta `domain -> datasources` y agregamos un nuevo Future `getMovieById`.
+
+```
+import '../entities/movie.dart';
+
+abstract class MoviesDatasource {
+
+  Future<List<Movie>> getNowPlaying({ int page = 1 });
+
+  Future<List<Movie>> getPopular({ int page = 1 });
+
+  Future<List<Movie>> getUpcoming({ int page = 1 });
+
+  Future<List<Movie>> getTopRated({ int page = 1 });
+
+  Future<Movie> getMovieById( String id );
+
+}
+```
+
+- Tambien lo agregamos en el archivo `movies_repository.dart`, que se encuentra en la carpeta `domain -> repositories`
+
+```
+import '../entities/movie.dart';
+
+abstract class MoviesRepository {
+
+  Future<List<Movie>> getNowPlaying({ int page = 1 });
+
+  Future<List<Movie>> getPopular({ int page = 1 });
+
+  Future<List<Movie>> getUpcoming({ int page = 1 });
+
+  Future<List<Movie>> getTopRated({ int page = 1 });
+
+  Future<Movie> getMovieById( String id );
+}
+```
+
+- Ahora nos vamos al archivo `moviedb_datasource,dart`, que se encuentra en la carpeta `infrastructure -> datasources` y ahi es  donde vamos a hacer la implementación, agregamos el nuevo metodo `getMovieById`, por el momento no esta completo, falta crear la entity
+
+```
+@override
+Future<Movie> getMovieById(String id) async {
+  final response = await dio.get('movie/$id');
+
+  return;
+}
+```
+
+- Ahora nos vamos a `quicktype.io`, para generar tener el `MovieDetail` del api, pegamos la respuesta en el archivo `movie_details.dart`, que se encuentra en la carpeta `infrastructure -> models -> moviedb`
+
+```
+class MovieDetails {
+    MovieDetails({
+        required this.adult,
+        required this.backdropPath,
+        required this.belongsToCollection,
+        required this.budget,
+        required this.genres,
+        required this.homepage,
+        required this.id,
+        required this.imdbId,
+        required this.originalLanguage,
+        required this.originalTitle,
+        required this.overview,
+        required this.popularity,
+        required this.posterPath,
+        required this.productionCompanies,
+        required this.productionCountries,
+        required this.releaseDate,
+        required this.revenue,
+        required this.runtime,
+        required this.spokenLanguages,
+        required this.status,
+        required this.tagline,
+        required this.title,
+        required this.video,
+        required this.voteAverage,
+        required this.voteCount,
+    });
+
+    final bool adult;
+    final String backdropPath;
+    final BelongsToCollection? belongsToCollection;
+    final int budget;
+    final List<Genre> genres;
+    final String homepage;
+    final int id;
+    final String imdbId;
+    final String originalLanguage;
+    final String originalTitle;
+    final String overview;
+    final double popularity;
+    final String posterPath;
+    final List<ProductionCompany> productionCompanies;
+    final List<ProductionCountry> productionCountries;
+    final DateTime releaseDate;
+    final int revenue;
+    final int runtime;
+    final List<SpokenLanguage> spokenLanguages;
+    final String status;
+    final String tagline;
+    final String title;
+    final bool video;
+    final double voteAverage;
+    final int voteCount;
+
+    factory MovieDetails.fromJson(Map<String, dynamic> json) => MovieDetails(
+        adult: json["adult"],
+        backdropPath: json["backdrop_path"] ?? '',
+        belongsToCollection: json["belongs_to_collection"] == null ? null : BelongsToCollection.fromJson(json["belongs_to_collection"]),
+        budget: json["budget"],
+        genres: List<Genre>.from(json["genres"].map((x) => Genre.fromJson(x))),
+        homepage: json["homepage"],
+        id: json["id"],
+        imdbId: json["imdb_id"],
+        originalLanguage: json["original_language"],
+        originalTitle: json["original_title"],
+        overview: json["overview"],
+        popularity: json["popularity"]?.toDouble(),
+        posterPath: json["poster_path"],
+        productionCompanies: List<ProductionCompany>.from(json["production_companies"].map((x) => ProductionCompany.fromJson(x))),
+        productionCountries: List<ProductionCountry>.from(json["production_countries"].map((x) => ProductionCountry.fromJson(x))),
+        releaseDate: DateTime.parse(json["release_date"]),
+        revenue: json["revenue"],
+        runtime: json["runtime"],
+        spokenLanguages: List<SpokenLanguage>.from(json["spoken_languages"].map((x) => SpokenLanguage.fromJson(x))),
+        status: json["status"],
+        tagline: json["tagline"],
+        title: json["title"],
+        video: json["video"],
+        voteAverage: json["vote_average"]?.toDouble(),
+        voteCount: json["vote_count"],
+    );
+
+    Map<String, dynamic> toJson() => {
+        "adult": adult,
+        "backdrop_path": backdropPath,
+        "belongs_to_collection": belongsToCollection?.toJson(),
+        "budget": budget,
+        "genres": List<dynamic>.from(genres.map((x) => x.toJson())),
+        "homepage": homepage,
+        "id": id,
+        "imdb_id": imdbId,
+        "original_language": originalLanguage,
+        "original_title": originalTitle,
+        "overview": overview,
+        "popularity": popularity,
+        "poster_path": posterPath,
+        "production_companies": List<dynamic>.from(productionCompanies.map((x) => x.toJson())),
+        "production_countries": List<dynamic>.from(productionCountries.map((x) => x.toJson())),
+        "release_date": "${releaseDate.year.toString().padLeft(4, '0')}-${releaseDate.month.toString().padLeft(2, '0')}-${releaseDate.day.toString().padLeft(2, '0')}",
+        "revenue": revenue,
+        "runtime": runtime,
+        "spoken_languages": List<dynamic>.from(spokenLanguages.map((x) => x.toJson())),
+        "status": status,
+        "tagline": tagline,
+        "title": title,
+        "video": video,
+        "vote_average": voteAverage,
+        "vote_count": voteCount,
+    };
+}
+
+class BelongsToCollection {
+    BelongsToCollection({
+        required this.id,
+        required this.name,
+        required this.posterPath,
+        required this.backdropPath,
+    });
+
+    final int id;
+    final String name;
+    final String posterPath;
+    final String backdropPath;
+
+    factory BelongsToCollection.fromJson(Map<String, dynamic> json) => BelongsToCollection(
+        id: json["id"],
+        name: json["name"],
+        posterPath: json["poster_path"],
+        backdropPath: json["backdrop_path"],
+    );
+
+    Map<String, dynamic> toJson() => {
+        "id": id,
+        "name": name,
+        "poster_path": posterPath,
+        "backdrop_path": backdropPath,
+    };
+}
+
+class Genre {
+    Genre({
+        required this.id,
+        required this.name,
+    });
+
+    final int id;
+    final String name;
+
+    factory Genre.fromJson(Map<String, dynamic> json) => Genre(
+        id: json["id"],
+        name: json["name"],
+    );
+
+    Map<String, dynamic> toJson() => {
+        "id": id,
+        "name": name,
+    };
+}
+
+class ProductionCompany {
+    ProductionCompany({
+        required this.id,
+        this.logoPath,
+        required this.name,
+        required this.originCountry,
+    });
+
+    final int id;
+    final String? logoPath;
+    final String name;
+    final String originCountry;
+
+    factory ProductionCompany.fromJson(Map<String, dynamic> json) => ProductionCompany(
+        id: json["id"],
+        logoPath: json["logo_path"],
+        name: json["name"],
+        originCountry: json["origin_country"],
+    );
+
+    Map<String, dynamic> toJson() => {
+        "id": id,
+        "logo_path": logoPath,
+        "name": name,
+        "origin_country": originCountry,
+    };
+}
+
+class ProductionCountry {
+    ProductionCountry({
+        required this.iso31661,
+        required this.name,
+    });
+
+    final String iso31661;
+    final String name;
+
+    factory ProductionCountry.fromJson(Map<String, dynamic> json) => ProductionCountry(
+        iso31661: json["iso_3166_1"],
+        name: json["name"],
+    );
+
+    Map<String, dynamic> toJson() => {
+        "iso_3166_1": iso31661,
+        "name": name,
+    };
+}
+
+class SpokenLanguage {
+    SpokenLanguage({
+        required this.englishName,
+        required this.iso6391,
+        required this.name,
+    });
+
+    final String englishName;
+    final String iso6391;
+    final String name;
+
+    factory SpokenLanguage.fromJson(Map<String, dynamic> json) => SpokenLanguage(
+        englishName: json["english_name"],
+        iso6391: json["iso_639_1"],
+        name: json["name"],
+    );
+
+    Map<String, dynamic> toJson() => {
+        "english_name": englishName,
+        "iso_639_1": iso6391,
+        "name": name,
+    };
+}
+
+```
+
+- Necesitamos crea un nuevo `Mapper`, en el archivo `movie_mapper.dart`, que se encuentra en la carpeta `infrastructure -> mappers`, y colocamos el siguiente código:
+
+```
+static Movie movieDetailsToEntity(MovieDetails moviedb) => 
+  Movie(
+    adult: moviedb.adult,
+      backdropPath: (moviedb.backdropPath != '')
+        ? 'https://image.tmdb.org/t/p/w500/${ moviedb.backdropPath }'
+        : 'https://sd.keepcalms.com/i-w600/keep-calm-poster-not-found.jpg',
+      genreIds: moviedb.genres.map((e) => e.name).toList(),
+      id: moviedb.id,
+      originalLanguage: moviedb.originalLanguage,
+      originalTitle: moviedb.originalTitle,
+      overview: moviedb.overview,
+      popularity: moviedb.popularity,
+      posterPath: (moviedb.posterPath != '')
+         ? 'https://image.tmdb.org/t/p/w500/${ moviedb.posterPath }'
+        : 'https://sd.keepcalms.com/i-w600/keep-calm-poster-not-found.jpg',
+      releaseDate: moviedb.releaseDate,
+      title: moviedb.title,
+      video: moviedb.video,
+      voteAverage: moviedb.voteAverage,
+      voteCount: moviedb.voteCount
+  );
+```
+
+- Ahora nos vamos al archivo `moviedb_datasource,dart`, que se encuentra en la carpeta `infrastructure -> datasource,dart` y agregamos el sigueinte código:
+
+```
+@override
+Future<Movie> getMovieById(String id) async {
+  final response = await dio.get('/movie/$id');
+  if ( response.statusCode != 200 ) throw Exception('Movie with id: $id not found ');
+
+  final movieDetails = MovieDetails.fromJson(response.data);
+  final Movie movie = MovieMapper.movieDetailsToEntity(movieDetails);
+  return movie;
+}
+```
+
+- Ahora agregamos el metodo que le falta al repository en el archivo `movie_repository_impl.dart`, que se encuentra en la carpeta `infrastructure -> repositories`.
+
+```
+@override
+Future<Movie> getMovieById(String id) {
+  return datasource.getMovieById(id);
+}
+```
+
+- Vamos a agregar un nuevo provider para que llame las implementaciones y tener un cache local para que no se vuelva a disparar una petición si ya antes la hice.
+
+- Creamos el archivo `movie_info_provider.dart`, en la carpeta `presentation -> providers -> movies`
+- Colocamos el siguiente código:
+
+```
+
+import 'package:cinemapedia/presentation/providers/providers.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../domain/entities/movie.dart';
+
+// * Crear el provider
+final movieInfoProvider = StateNotifierProvider<MovieMapNotifier, Map<String, Movie>>((ref) {
+  final movieRepository = ref.watch( movieRepositoryProvider );
+  return MovieMapNotifier(getMovie: movieRepository.getMovieById);
+});
+
+// * Definición del callback
+typedef GetMovieCallback = Future<Movie>Function(String movieId);
+
+class MovieMapNotifier extends StateNotifier<Map<String, Movie>> {
+
+  final GetMovieCallback getMovie;
+
+  MovieMapNotifier({ 
+    required this.getMovie,
+  }): super({});
+
+  Future<void> loadMovie( String movieId ) async {
+
+    if ( state[movieId] != null ) return;
+
+    final movie = await getMovie( movieId ) ;
+
+
+    // * Genero un nuevo estado
+    // * Clono el state y agrego el movieId que apunta a la movie
+    state = { ...state, movieId: movie };
+  }
+
+}
+```
+
+#### Realizar petición HTTP y probar cache
+
+- Ahora no vamos al archivo `movie_screen.dart`, que se encuentra en la carpeta `presentation -> screens -> movies`, y transformamos el `StatelessWidget` por un `StatefulWidget`
+
+- Ahora cambiamos el `StatelessWidget` por un `ConsumerStatefulWidget` y otros cambios.
+
+- Agregamos el código:
+
+```
+import 'package:cinemapedia/presentation/providers/movies/movie_info_provider.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../domain/entities/movie.dart';
+
+class MovieScreen extends ConsumerStatefulWidget {
+
+  static const name = 'movie-screen';
+
+  final String movieId;
+
+  const MovieScreen({
+    super.key, 
+    required this.movieId
+  });
+
+  @override
+  MovieScreenState createState() => MovieScreenState();
+}
+
+class MovieScreenState extends ConsumerState<MovieScreen> {
+
+  @override
+  void initState() {
+    super.initState();
+
+    // * Si estamos dentro del initState, metodos, callback, onTap, onPress etc.
+    // * se usa el ref.read()
+    ref.read(movieInfoProvider.notifier).loadMovie(widget.movieId);
+
+  }
+
+  @override
+  Widget build(BuildContext context) {
+
+    final Movie? movie = ref.watch( movieInfoProvider )[widget.movieId];
+
+    if ( movie == null ) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator(strokeWidth: 2)));
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('MovieId: ${widget.movieId}'),
+      ),
+    );
+  }
+}
+```
+
+#### Diseño de pantalla películas
+
+- Vamos a utilizar `CustomScrollView` para trabajar con `slivers` en el archivo `movie_screen.dart`
+
+- En el `_CustomSliverAppBar, `vamos a agregar la imagen, gradientes para el titulo y la flechita del back 
+
+```
+import 'package:cinemapedia/presentation/providers/movies/movie_info_provider.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../domain/entities/movie.dart';
+
+class MovieScreen extends ConsumerStatefulWidget {
+
+  static const name = 'movie-screen';
+
+  final String movieId;
+
+  const MovieScreen({
+    super.key, 
+    required this.movieId
+  });
+
+  @override
+  MovieScreenState createState() => MovieScreenState();
+}
+
+class MovieScreenState extends ConsumerState<MovieScreen> {
+
+  @override
+  void initState() {
+    super.initState();
+
+    // * Si estamos dentro del initState, metodos, callback, onTap, onPress etc.
+    // * se usa el ref.read()
+    ref.read(movieInfoProvider.notifier).loadMovie(widget.movieId);
+
+  }
+
+  @override
+  Widget build(BuildContext context) {
+
+    final Movie? movie = ref.watch( movieInfoProvider )[widget.movieId];
+
+    if ( movie == null ) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator(strokeWidth: 2)));
+    }
+
+    return Scaffold(
+      body: CustomScrollView(
+        physics: const ClampingScrollPhysics(), // evita el rebote del scrollView
+        slivers: [
+          _CustomSliverAppBar(movie: movie)
+        ],
+      ),
+    );
+  }
+}
+
+class _CustomSliverAppBar extends StatelessWidget {
+
+  final Movie movie;
+
+  const _CustomSliverAppBar({
+    required this.movie
+  });
+
+  @override
+  Widget build(BuildContext context) {
+
+    // * Tengo las dimensiones del dispositivo fisico conel MediaQuery
+    final size = MediaQuery.of(context).size;
+
+    return SliverAppBar(
+      backgroundColor: Colors.black,
+      expandedHeight: size.height * 0.7,
+      foregroundColor: Colors.white,
+      shadowColor: Colors.red,
+      flexibleSpace: FlexibleSpaceBar(
+        titlePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        title: Text(
+          movie.title,
+          style: const TextStyle(fontSize: 20),
+          textAlign: TextAlign.start,
+        ),
+        background: Stack(
+          children: [
+
+            SizedBox.expand(
+              child: Image.network(
+                movie.posterPath,
+                fit: BoxFit.cover,
+              ),
+            ),
+
+            // * Aplicar gradientes para fondos claros de la imagen
+            const SizedBox.expand(
+              child: DecoratedBox(
+
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: [0.7, 1.0],
+                    colors: [
+                      Colors.transparent,
+                      Colors.black87
+                    ]
+                  ),
+                )
+              ),
+            ),
+
+            // * Aplicar gradientes para la flechita del back
+            const SizedBox.expand(
+              child: DecoratedBox(
+
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    stops: [0.0, 0.3],
+                    colors: [
+                      Colors.black87,
+                      Colors.transparent,
+                    ]
+                  ),
+                )
+              ),
+            ),
+
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+#### Descripción de la película
+
+- Vamos a agregar el `SliverList` y el widget `_MovieDetails`
+
+- Agregamos el llamado del widget `_MovieDetails`
+
+```
+ return Scaffold(
+      body: CustomScrollView(
+        physics: const ClampingScrollPhysics(), // evita el rebote del scrollView
+        slivers: [
+          _CustomSliverAppBar(movie: movie),
+          SliverList(delegate: SliverChildBuilderDelegate(
+            (context, index) => _MovieDetails(movie: movie),
+            childCount: 1
+          ))
+        ],
+      ),
+    );
+```
+
+- Y agregamos el codigo del widget `_MovieDetails`, falta agregar los actores, pero ya se muestra el titulo y descripción, generos e imagen del poster
+
+```
+class _MovieDetails extends StatelessWidget {
+
+  final Movie movie;
+
+  const _MovieDetails({required this.movie});
+
+  @override
+  Widget build(BuildContext context) {
+
+    final size = MediaQuery.of(context).size;
+    final textStyle = Theme.of(context).textTheme;
+
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+
+        Padding(
+          padding:  const EdgeInsets.all(8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+
+              // * Imagen
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.network(
+                  movie.posterPath,
+                  width: size.width * 0.3,
+                ),
+              ),
+
+              const SizedBox( width: 10 ),
+
+              // * Titulo y Descripción
+              SizedBox(
+                width: (size.width - 40) * 0.7,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text( movie.title, style: textStyle.titleLarge ),
+                    Text( movie.overview ),
+                  ],
+                ),
+              )
+            ],
+          ),
+        ),
+
+        // * Generos de la película
+        Padding(
+          padding: const EdgeInsets.all(8),
+          child: Wrap(
+            children: [
+              ...movie.genreIds.map((gender) => Container(
+                margin: const EdgeInsets.only(right: 10),
+                child: Chip(
+                  label: Text(gender),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                ),
+              ))
+            ],
+          ),
+        ),
+
+        // TODO: Mostrar actores
+
+        const SizedBox(height: 100)
+      ],
+    );
+  }
+}
+```
+
+#### Actore de película
+
+- Creamos una nueva entidad `actor.dart` en la carpeta `domain -> entities`
+
+```
+class Actor {
+
+  final int id;
+  final String name;
+  final String profilePath;
+  final String? character;
+
+  Actor({
+    required this.id, 
+    required this.name, 
+    required this.profilePath, 
+    required this.character,
+  });
+
+}
+```
+
+- Creamos un nuevo datasource de `actors` en la carpeta `domain -> datasources`, llamado `actors_datasource.dart`
+
+```
+// * Definimos las reglas que necesito para trabajar este datasource
+import '../entities/actor.dart';
+
+abstract class ActorsDatasource {
+
+  Future<List<Actor>> getActorsByMovie( String movieId );
+}
+```
+
+- Creamos un nuevo repository de `actors` en la carpeta `domain -> repositories`, llamado `actors_repository.dart`
+
+```
+import '../entities/actor.dart';
+
+abstract class ActorsRepository {
+  
+  Future<List<Actor>> getActorsByMovies( String movieId );
+}
+```
+
+- creamos el nuevo modelo vamos al postman y compiamos le respuesta del endpoint `GET https://api.themoviedb.org/3/movie/505642/credits` y la copiamos en `quiecktype.io` y le colocamos el nombre de `CreditsResponse` y los colocamos en el archivo `credits_response.dart`, en la carpeta `infrastructure -> models -> moviedb`
+
+```
+class CreditsResponse {
+    CreditsResponse({
+        required this.id,
+        required this.cast,
+        required this.crew,
+    });
+
+    final int id;
+    final List<Cast> cast;
+    final List<Cast> crew;
+
+    factory CreditsResponse.fromJson(Map<String, dynamic> json) => CreditsResponse(
+        id: json["id"],
+        cast: List<Cast>.from(json["cast"].map((x) => Cast.fromJson(x))),
+        crew: List<Cast>.from(json["crew"].map((x) => Cast.fromJson(x))),
+    );
+
+    Map<String, dynamic> toJson() => {
+        "id": id,
+        "cast": List<dynamic>.from(cast.map((x) => x.toJson())),
+        "crew": List<dynamic>.from(crew.map((x) => x.toJson())),
+    };
+}
+
+class Cast {
+    Cast({
+        required this.adult,
+        required this.gender,
+        required this.id,
+        required this.knownForDepartment,
+        required this.name,
+        required this.originalName,
+        required this.popularity,
+        this.profilePath,
+        this.castId,
+        this.character,
+        required this.creditId,
+        this.order,
+        this.department,
+        this.job,
+    });
+
+    final bool adult;
+    final int gender;
+    final int id;
+    final String knownForDepartment;
+    final String name;
+    final String originalName;
+    final double popularity;
+    final String? profilePath;
+    final int? castId;
+    final String? character;
+    final String creditId;
+    final int? order;
+    final String? department;
+    final String? job;
+
+    factory Cast.fromJson(Map<String, dynamic> json) => Cast(
+        adult: json["adult"],
+        gender: json["gender"],
+        id: json["id"],
+        knownForDepartment: json["known_for_department"],
+        name: json["name"],
+        originalName: json["original_name"],
+        popularity: json["popularity"]?.toDouble(),
+        profilePath: json["profile_path"],
+        castId: json["cast_id"],
+        character: json["character"],
+        creditId: json["credit_id"],
+        order: json["order"],
+        department: json["department"],
+        job: json["job"],
+    );
+
+    Map<String, dynamic> toJson() => {
+        "adult": adult,
+        "gender": gender,
+        "id": id,
+        "known_for_department": knownForDepartment,
+        "name": name,
+        "original_name": originalName,
+        "popularity": popularity,
+        "profile_path": profilePath,
+        "cast_id": castId,
+        "character": character,
+        "credit_id": creditId,
+        "order": order,
+        "department": department,
+        "job": job,
+    };
+}
+
+
+```
+
+- Necesitamos crear el mapper, `actor_mapper.dart`, en la carpeta `infrastructure -> mappers`
+
+```
+import '../../domain/entities/actor.dart';
+import '../models/moviedb/credits_response.dart';
+
+class ActorMapper {
+
+  static Actor castToEntity( Cast cast) => 
+  Actor(
+    id: cast.id, 
+    character: cast.character, 
+    name: cast.name, 
+    profilePath: cast.profilePath != null
+      ? 'https://image.tmdb.org/t/p/w500/${ cast.profilePath }'
+      : 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTC0HlQ_ckX6HqCAlqroocyRDx_ZRu3x3ezoA&usqp=CAU'
+
+  );
+}
+```
+
+- Creamos la implementacion del datasource `actor_moviedb_datasource.dart`, en la carpeta `infrastructure -> datasources`
+
+```
+
+import 'package:cinemapedia/domain/datasources/actors_datasource.dart';
+import 'package:cinemapedia/domain/entities/actor.dart';
+import 'package:cinemapedia/infrastructure/mappers/actor_mapper.dart';
+import 'package:cinemapedia/infrastructure/models/moviedb/credits_response.dart';
+import 'package:dio/dio.dart';
+
+import '../../config/constants/environment.dart';
+
+class ActorMovieDbDatasource extends ActorsDatasource {
+
+  // Propiedades de la clase MoviedbDatasource
+    final dio = Dio(BaseOptions(
+      baseUrl: 'https://api.themoviedb.org/3',
+      queryParameters: {
+        'api_key': Environment.theMovieDbKey,
+        'language': 'es-ES' // es-MX
+      }
+    ));
+
+  @override
+  Future<List<Actor>> getActorsByMovie(String movieId) async {
+
+    final response = await dio.get('/movie/$movieId/credits');
+
+    final castResponse = CreditsResponse.fromJson(response.data);
+
+    List<Actor> actors = castResponse.cast.map(
+      (cast) => ActorMapper.castToEntity(cast)
+    ).toList();
+
+    return actors;
+
+  }
+
+}
+
+```
+
+- Creamos el archivo `actors_repository_provider.dart`, en la carpeta `presentation -> providers -> actors`
+
+```
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../infrastructure/datasources/actor_moviedb_datasource.dart';
+import '../../../infrastructure/repositories/actor_repository_impl.dart';
+
+final actorsRepositoryProvider = Provider((ref) {
+  return ActorRepositoryImpl(ActorMovieDbDatasource()); 
+});
+```
+
+#### Creamos la implementacion del Repositorio y Prpvider
+
+- Creamos el archivo `actor_repository_impl.dart`, en la carpeta `infrastructure -> repositories`.
+
+```
+import 'package:cinemapedia/domain/datasources/actors_datasource.dart';
+import 'package:cinemapedia/domain/entities/actor.dart';
+import 'package:cinemapedia/domain/repositories/actors_repository.dart';
+
+class ActorRepositoryImpl extends ActorsRepository  {
+
+  final ActorsDatasource datasource;
+
+  ActorRepositoryImpl(this.datasource);
+
+  @override
+  Future<List<Actor>> getActorsByMovies(String movieId) {
+    return datasource.getActorsByMovie(movieId);
+  }
+}
+```
+
+- Creamos el nuevo Providers `actors_by_movie_provider.dart`, en la carpeta `presentation -> providers -> actors`
+
+```
+import 'package:cinemapedia/presentation/providers/actors/actors_repository_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../domain/entities/actor.dart';
+
+
+// * Crear el provider
+final actorsByMovieProvider = StateNotifierProvider<ActorsByMovieNotifier, Map<String, List<Actor>>>((ref) {
+  final actorsRepository = ref.watch( actorsRepositoryProvider );
+
+  return ActorsByMovieNotifier(getActors: actorsRepository.getActorsByMovies);
+});
+
+/*
+  {
+    '505642': <Actor>(),
+    '505643': <Actor>(),
+    '505643': <Actor>(),
+    '505342': <Actor>(),
+  }
+*/
+
+// * Definición del callback
+typedef GetActorsCallback = Future<List<Actor>>Function(String movieId);
+
+class ActorsByMovieNotifier extends StateNotifier<Map<String, List<Actor>>> {
+
+  final GetActorsCallback getActors;
+
+  ActorsByMovieNotifier({ 
+    required this.getActors,
+  }): super({});
+
+  Future<void> loadActors( String movieId ) async {
+
+    if ( state[movieId] != null ) return;
+
+    final List<Actor> actors = await getActors( movieId ) ;
+
+
+    // * Genero un nuevo estado
+    // * Clono el state y agrego el movieId que apunta a la movie
+    state = { ...state, movieId: actors };
+  }
+
+}
+```
+
+#### Probar la obtención de Actores
+
+- Agregamos en el `movie_screen.dart` lo siguiente
+
+```
+ @override
+  void initState() {
+    super.initState();
+
+    // * Si estamos dentro del initState, metodos, callback, onTap, onPress etc.
+    // * se usa el ref.read()
+    ref.read(movieInfoProvider.notifier).loadMovie(widget.movieId);
+
+    ref.read(actorsByMovieProvider.notifier).loadActors(widget.movieId);
+
+  }
+```
+
+#### Mostrar Actores en pantalla diseño
+
+- Agregamoe le código en el archivo `movie_screen.dart`
+
+```
+import 'package:cinemapedia/presentation/providers/movies/movie_info_provider.dart';
+import 'package:cinemapedia/presentation/providers/providers.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../domain/entities/movie.dart';
+
+class MovieScreen extends ConsumerStatefulWidget {
+
+  static const name = 'movie-screen';
+
+  final String movieId;
+
+  const MovieScreen({
+    super.key, 
+    required this.movieId
+  });
+
+  @override
+  MovieScreenState createState() => MovieScreenState();
+}
+
+class MovieScreenState extends ConsumerState<MovieScreen> {
+
+  @override
+  void initState() {
+    super.initState();
+
+    // * Si estamos dentro del initState, metodos, callback, onTap, onPress etc.
+    // * se usa el ref.read()
+    ref.read(movieInfoProvider.notifier).loadMovie(widget.movieId);
+
+    ref.read(actorsByMovieProvider.notifier).loadActors(widget.movieId);
+
+  }
+
+  @override
+  Widget build(BuildContext context) {
+
+    final Movie? movie = ref.watch( movieInfoProvider )[widget.movieId];
+
+    if ( movie == null ) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator(strokeWidth: 2)));
+    }
+
+    return Scaffold(
+      body: CustomScrollView(
+        physics: const ClampingScrollPhysics(), // evita el rebote del scrollView
+        slivers: [
+          _CustomSliverAppBar(movie: movie),
+          SliverList(delegate: SliverChildBuilderDelegate(
+            (context, index) => _MovieDetails(movie: movie),
+            childCount: 1
+          ))
+        ],
+      ),
+    );
+  }
+}
+
+class _CustomSliverAppBar extends StatelessWidget {
+
+  final Movie movie;
+
+  const _CustomSliverAppBar({
+    required this.movie
+  });
+
+  @override
+  Widget build(BuildContext context) {
+
+    // * Tengo las dimensiones del dispositivo fisico conel MediaQuery
+    final size = MediaQuery.of(context).size;
+
+    return SliverAppBar(
+      backgroundColor: Colors.black,
+      expandedHeight: size.height * 0.7,
+      foregroundColor: Colors.white,
+      shadowColor: Colors.red,
+      flexibleSpace: FlexibleSpaceBar(
+        titlePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        // title: Text(
+        //   movie.title,
+        //   style: const TextStyle(fontSize: 20),
+        //   textAlign: TextAlign.start,
+        // ),
+        background: Stack(
+          children: [
+
+            SizedBox.expand(
+              child: Image.network(
+                movie.posterPath,
+                fit: BoxFit.cover,
+              ),
+            ),
+
+            // * Aplicar gradientes para fondos claros de la imagen
+            const SizedBox.expand(
+              child: DecoratedBox(
+
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: [0.7, 1.0],
+                    colors: [
+                      Colors.transparent,
+                      Colors.black87
+                    ]
+                  ),
+                )
+              ),
+            ),
+
+            // * Aplicar gradientes para la flechita del back
+            const SizedBox.expand(
+              child: DecoratedBox(
+
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    stops: [0.0, 0.3],
+                    colors: [
+                      Colors.black87,
+                      Colors.transparent,
+                    ]
+                  ),
+                )
+              ),
+            ),
+
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MovieDetails extends StatelessWidget {
+
+  final Movie movie;
+
+  const _MovieDetails({required this.movie});
+
+  @override
+  Widget build(BuildContext context) {
+
+    final size = MediaQuery.of(context).size;
+    final textStyle = Theme.of(context).textTheme;
+
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+
+        Padding(
+          padding:  const EdgeInsets.all(8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+
+              // * Imagen
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.network(
+                  movie.posterPath,
+                  width: size.width * 0.3,
+                ),
+              ),
+
+              const SizedBox( width: 10 ),
+
+              // * Titulo y Descripción
+              SizedBox(
+                width: (size.width - 40) * 0.7,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text( movie.title, style: textStyle.titleLarge ),
+                    Text( movie.overview ),
+                  ],
+                ),
+              )
+            ],
+          ),
+        ),
+
+        // * Generos de la película
+        // * Se podria cambiar el widget Chip por un button
+        // * y al darle click al genero llamar al endpoint
+        // * Get movie/{movie_id}/similar
+        Padding(
+          padding: const EdgeInsets.all(8),
+          child: Wrap(
+            children: [
+              ...movie.genreIds.map((gender) => Container(
+                margin: const EdgeInsets.only(right: 10),
+                child: Chip(
+                  label: Text(gender),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                ),
+              ))
+            ],
+          ),
+        ),
+
+        // * Mostrar Actores
+        _ActorByMovie(movieId: movie.id.toString(),),
+
+        const SizedBox(height: 50)
+      ],
+    );
+  }
+}
+
+class _ActorByMovie extends ConsumerWidget {
+
+  final String movieId; 
+
+  const _ActorByMovie({required this.movieId});
+
+  @override
+  Widget build(BuildContext context, ref) {
+
+    final actorsByMovie = ref.watch( actorsByMovieProvider );
+
+    if ( actorsByMovie[movieId] == null ) {
+      return const CircularProgressIndicator(strokeWidth: 2);
+    }
+
+    final actors = actorsByMovie[movieId]!;
+
+    return SizedBox(
+      height: 300,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: actors.length,
+        itemBuilder: (context, index) {
+          final actor = actors[index];
+
+          return Container(
+            padding: const EdgeInsets.all(8.0),
+            width: 135,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+
+                // * Actor photo
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.network(
+                    actor.profilePath,
+                    height: 180,
+                    width: 135,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+
+                // * Nombre
+                const SizedBox(height: 5),
+
+                Text(actor.name, maxLines: 2),
+                Text(
+                  actor.character ?? '', 
+                  maxLines: 2,
+                  style: const TextStyle( fontWeight: FontWeight.bold, overflow: TextOverflow.ellipsis),
+                )
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    return const Placeholder();
+  }
+}
+```
+
+#### Detalles esteticos
+
+- Agregamos el `FadeIn` en la imagen, en el archivo `movie_screen`, en el `_CustomSliverAppBar`
+
+```
+// * Imagen
+SizedBox.expand(
+  child: Image.network(
+    movie.posterPath,
+    fit: BoxFit.cover,
+    loadingBuilder: (context, child, loadingProgress) {
+      if ( loadingProgress != null ) return const SizedBox();
+      return FadeIn(child: child);
+    },
+  ),
+),
+```
+
+- Agregamos un `FadeInRight` en la imagen de actor en el archivo `movie_screen`, en el `_ActorByMovie`
+
+```
+// * Actor photo
+FadeInRight(
+  child: ClipRRect(
+    borderRadius: BorderRadius.circular(20),
+    child: Image.network(
+      actor.profilePath,
+      height: 180,
+      width: 135,
+      fit: BoxFit.cover,
+    ),
+  ),
+),
+
+```
