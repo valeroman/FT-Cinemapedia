@@ -4238,3 +4238,425 @@ class SearchMovieDelegate extends SearchDelegate {
 @override
   String get searchFieldLabel => 'Buscar película';
 ```
+
+#### Leading y Actions SerchDelegate
+
+- El buildLeading sirve para salir de la busqueda
+- El buildActions sirve para borrar el dato que ingresamos para realizar la busqueda
+- Tambien el `SearchDelegate` va a regresar una `Movie` opcional
+
+```
+import 'package:animate_do/animate_do.dart';
+import 'package:flutter/material.dart';
+
+import '../../domain/entities/movie.dart';
+
+class SearchMovieDelegate extends SearchDelegate<Movie?> {
+
+  @override
+  String get searchFieldLabel => 'Buscar película';
+
+  @override
+  List<Widget>? buildActions(BuildContext context) {
+    return [
+
+      FadeIn(
+        animate: query.isNotEmpty,
+        child: IconButton(
+          onPressed: () => query = '', 
+          icon: const Icon(Icons.clear)
+        ),
+      ),
+
+
+    ];
+  }
+
+  @override
+  Widget? buildLeading(BuildContext context) {
+    return IconButton(
+      onPressed: () => close(context, null), 
+      icon: const Icon(Icons.arrow_back_ios_new_rounded)
+    )
+    ;
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    return const Text('buildResults');
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    return const Text('buildSuggestions');
+  }
+
+}
+```
+
+#### Construir Sugerencias - Petición Http
+
+- En el archivo `search_movie_delegate.dart`, agregamos un tipo de funcion que me va a permitir buscar las peliculas, agrego esa nueva propiedad y creo el constructor
+
+```
+// * Definir un tipo de función para hacer el searchMovie
+// * que traiga una lista de movies
+typedef SearchMoviesCallback = Future<List<Movie>> Function( String query);
+
+class SearchMovieDelegate extends SearchDelegate<Movie?> {
+
+  final SearchMoviesCallback searchMovies;
+
+  SearchMovieDelegate({
+    required this.searchMovies
+  });
+
+......
+}
+```
+
+- Ahora en el archivo `custom_appbar`, da error por que tenemos que agregar el parametro a la funcion `SearchMovieDelegate`, pero tenemos que cambiar el `StatelessWidget` por `ConsumerWidget`, para tener acceso al `Widget ref`
+
+```
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:cinemapedia/presentation/delegates/search_movie_delegate.dart';
+import '../../providers/movies/movies_repository_provider.dart';
+
+class CustomAppbar extends ConsumerWidget {
+  const CustomAppbar({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+
+    final colors = Theme.of(context).colorScheme;
+    final titleStyle = Theme.of(context).textTheme.titleMedium;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: SizedBox(
+          width: double.infinity,
+          child: Row(
+            children: [
+              Icon(Icons.movie_outlined, color: colors.primary),
+              const SizedBox( width: 5 ),
+              Text('Cinemapedia', style: titleStyle,),
+      
+              const Spacer(),
+      
+              IconButton(
+                onPressed: (){
+
+                  final movieRepository = ref.read(movieRepositoryProvider);
+
+                  showSearch(
+                    context: context, 
+                    delegate: SearchMovieDelegate(
+                      searchMovies: movieRepository.searchMovies
+                    )
+                  );
+                }, 
+                icon: const Icon(Icons.search)
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+- Ahora regresamos al archivo `search_movie_delegate.dart`, en la función de `buildSuggestions`, agregamos el siguiente código:
+
+```
+@override
+Widget buildSuggestions(BuildContext context) {
+
+  return FutureBuilder(
+    future: searchMovies(query),
+    builder: (context, snapshot) {
+
+      final movies = snapshot.data ?? [];
+
+      return ListView.builder(
+        itemCount: movies.length,
+        itemBuilder: (context, index) {
+          final movie = movies[index];
+
+          return ListTile(
+            title: Text( movie.title ),
+          );
+        },
+      );
+    },
+  );
+}
+```
+
+#### Mostrar las Películas en la busqueda
+
+- En el archivo `search_movie_delegate.dart`, creamos el widget `_MovieItem`, para mostrar la foto, titulo y descripción de las peliculas usando el siguiente código:
+
+```
+class _MovieItem extends StatelessWidget {
+
+  final Movie movie;
+
+  const _MovieItem({
+    required this.movie
+  });
+
+  @override
+  Widget build(BuildContext context) {
+
+    final textStyles = Theme.of(context).textTheme;
+    final size = MediaQuery.of(context).size;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      child: Row(
+        children: [
+
+          // * Image
+          SizedBox(
+            width: size.width * 0.2,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Image.network(
+                movie.posterPath,
+                loadingBuilder: (context, child, loadingProgress) => FadeIn(child: child),
+              ),
+            ),
+          ),
+
+          const SizedBox( width: 10),
+
+          // * Description
+          SizedBox(
+            width: size.width * 0.7,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text( movie.title, style: textStyles.titleMedium),
+
+                (movie.overview.length > 100)
+                  ? Text( '${movie.overview.substring(0,100)}...' )
+                  : Text( movie.overview ),
+
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+#### Mostrar calificación de peliculas
+
+- Agregamos el siguiente código en el archivo `search_movie_delegate.dart`, en el widget `_MovieItem`
+
+```
+// * Description
+SizedBox(
+  width: size.width * 0.7,
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text( movie.title, style: textStyles.titleMedium),
+
+      (movie.overview.length > 100)
+        ? Text( '${movie.overview.substring(0,100)}...' )
+        : Text( movie.overview ),
+
+      Row(
+        children: [
+          Icon(Icons.star_half_rounded, color: Colors.yellow.shade800),
+          const SizedBox(width: 5),
+          Text( 
+            HumanFormats.number(movie.voteAverage, 1),
+            style: textStyles.bodyMedium!.copyWith(color: Colors.yellow.shade900),
+          )
+        ],
+      )
+
+    ],
+  ),
+),
+```
+
+#### Regresar a la busqueda con argumentos
+
+- En el `_MovieItem` envolvemos en un nuevo widget el `Padding`  y agregamos un `GestureDetector`
+
+- Ahora voy a recibir una funcion en mi widget `_MovieItem`, para pasar la función `close` global que tengo en el searchDelegate
+
+- El código quedaria asi:
+
+```
+
+
+import 'package:animate_do/animate_do.dart';
+import 'package:cinemapedia/config/helpers/human_formats.dart';
+import 'package:flutter/material.dart';
+
+import '../../domain/entities/movie.dart';
+
+// * Definir un tipo de función para hacer el searchMovie
+// * que traiga una lista de movies
+typedef SearchMoviesCallback = Future<List<Movie>> Function( String query);
+
+class SearchMovieDelegate extends SearchDelegate<Movie?> {
+
+  final SearchMoviesCallback searchMovies;
+
+  SearchMovieDelegate({
+    required this.searchMovies
+  });
+
+  @override
+  String get searchFieldLabel => 'Buscar película';
+
+  @override
+  List<Widget>? buildActions(BuildContext context) {
+    return [
+
+      FadeIn(
+        animate: query.isNotEmpty,
+        child: IconButton(
+          onPressed: () => query = '', 
+          icon: const Icon(Icons.clear)
+        ),
+      ),
+
+
+    ];
+  }
+
+  @override
+  Widget? buildLeading(BuildContext context) {
+    return IconButton(
+      onPressed: () => close(context, null), 
+      icon: const Icon(Icons.arrow_back_ios_new_rounded)
+    )
+    ;
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    return const Text('buildResults');
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+
+    return FutureBuilder(
+      future: searchMovies(query),
+      builder: (context, snapshot) {
+
+        final movies = snapshot.data ?? [];
+
+        return ListView.builder(
+          itemCount: movies.length,
+          itemBuilder: (context, index) => _MovieItem(
+            movie: movies[index],
+            onMovieSelected: close,
+          ),
+        );
+      },
+    );
+  }
+
+}
+
+class _MovieItem extends StatelessWidget {
+
+  final Movie movie;
+  final Function onMovieSelected;
+
+  const _MovieItem({
+    required this.movie, 
+    required this.onMovieSelected
+  });
+
+  @override
+  Widget build(BuildContext context) {
+
+    final textStyles = Theme.of(context).textTheme;
+    final size = MediaQuery.of(context).size;
+
+    return GestureDetector(
+      onTap: () {
+        onMovieSelected(context, movie);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: Row(
+          children: [
+    
+            // * Image
+            SizedBox(
+              width: size.width * 0.2,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.network(
+                  movie.posterPath,
+                  loadingBuilder: (context, child, loadingProgress) => FadeIn(child: child),
+                ),
+              ),
+            ),
+    
+            const SizedBox( width: 10),
+    
+            // * Description
+            SizedBox(
+              width: size.width * 0.7,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text( movie.title, style: textStyles.titleMedium),
+    
+                  (movie.overview.length > 100)
+                    ? Text( '${movie.overview.substring(0,100)}...' )
+                    : Text( movie.overview ),
+    
+                  Row(
+                    children: [
+                      Icon(Icons.star_half_rounded, color: Colors.yellow.shade800),
+                      const SizedBox(width: 5),
+                      Text( 
+                        HumanFormats.number(movie.voteAverage, 1),
+                        style: textStyles.bodyMedium!.copyWith(color: Colors.yellow.shade900),
+                      )
+                    ],
+                  )
+    
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+- Ahora nos vamos al archivo `custom_appbar.dat` y en el `showSearch`, le decimos que vamos a trabajar con un Movie opcional `showSearch<Movie?>`
+
+```
+ showSearch<Movie?>(
+  context: context, 
+  delegate: SearchMovieDelegate(
+    searchMovies: movieRepository.searchMovies
+  )
+).then((movie) {
+  if (movie == null) return;
+
+  context.push('/movie/${ movie.id }');
+});
+```
