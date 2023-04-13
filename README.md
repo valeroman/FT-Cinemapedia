@@ -4153,6 +4153,8 @@ Future<List<Movie>> searchMovies( String query );
 @override
 Future<List<Movie>> searchMovies(String query) async {
   
+  if( query.isEmpty) return [];
+
   final response = await dio.get('/search/movie',
     queryParameters: {
       'query': query
@@ -4659,4 +4661,924 @@ class _MovieItem extends StatelessWidget {
 
   context.push('/movie/${ movie.id }');
 });
+```
+
+#### Debounce Manual
+
+- Vamos a usar un `Stream`, para cotrolar las peticiones, agregamos esta nueva propieda `StreamController<List<Movie>> debouncedMovie = StreamController.broadcast();`
+
+- En el `FutureBuilder` lo cambiamos por un `StreamBuilder` y ya no tenemos el `future: searchMovies(query)` lo comentamos y agregamos el `stream: debounceMovie.stream,`
+
+```
+
+
+import 'dart:async';
+
+import 'package:animate_do/animate_do.dart';
+import 'package:cinemapedia/config/helpers/human_formats.dart';
+import 'package:flutter/material.dart';
+
+import '../../domain/entities/movie.dart';
+
+// * Definir un tipo de función para hacer el searchMovie
+// * que traiga una lista de movies
+typedef SearchMoviesCallback = Future<List<Movie>> Function( String query);
+
+class SearchMovieDelegate extends SearchDelegate<Movie?> {
+
+  final SearchMoviesCallback searchMovies;
+  StreamController<List<Movie>> debouncedMovie = StreamController.broadcast();
+  Timer? _debouncerTimer;
+
+  SearchMovieDelegate({
+    required this.searchMovies
+  });
+
+  void _onQueryChanged( String query) {
+
+    print('Query string cambió');
+
+    // * funcion encargada de emitir el nuevo resultado del las películas
+    if (  _debouncerTimer?.isActive ?? false ) _debouncerTimer!.cancel();
+
+    _debouncerTimer = Timer( const Duration( milliseconds: 500 ), () {
+      print('Buscando peliculas');
+    });
+  }
+
+  @override
+  String get searchFieldLabel => 'Buscar película';
+
+  @override
+  List<Widget>? buildActions(BuildContext context) {
+    return [
+
+      FadeIn(
+        animate: query.isNotEmpty,
+        child: IconButton(
+          onPressed: () => query = '', 
+          icon: const Icon(Icons.clear)
+        ),
+      ),
+
+
+    ];
+  }
+
+  @override
+  Widget? buildLeading(BuildContext context) {
+    return IconButton(
+      onPressed: () => close(context, null), 
+      icon: const Icon(Icons.arrow_back_ios_new_rounded)
+    )
+    ;
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    return const Text('buildResults');
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+
+    // * Cada vez que toque una tecla se llama o emite el _onQueryChanged
+    _onQueryChanged(query);
+
+    return StreamBuilder(
+      // future: searchMovies(query),
+      stream: debouncedMovie.stream,
+      builder: (context, snapshot) {
+
+        final movies = snapshot.data ?? [];
+
+        return ListView.builder(
+          itemCount: movies.length,
+          itemBuilder: (context, index) => _MovieItem(
+            movie: movies[index],
+            onMovieSelected: close,
+          ),
+        );
+      },
+    );
+  }
+
+}
+
+class _MovieItem extends StatelessWidget {
+
+  final Movie movie;
+  final Function onMovieSelected;
+
+  const _MovieItem({
+    required this.movie, 
+    required this.onMovieSelected
+  });
+
+  @override
+  Widget build(BuildContext context) {
+
+    final textStyles = Theme.of(context).textTheme;
+    final size = MediaQuery.of(context).size;
+
+    return GestureDetector(
+      onTap: () {
+        onMovieSelected(context, movie);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: Row(
+          children: [
+    
+            // * Image
+            SizedBox(
+              width: size.width * 0.2,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.network(
+                  movie.posterPath,
+                  loadingBuilder: (context, child, loadingProgress) => FadeIn(child: child),
+                ),
+              ),
+            ),
+    
+            const SizedBox( width: 10),
+    
+            // * Description
+            SizedBox(
+              width: size.width * 0.7,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text( movie.title, style: textStyles.titleMedium),
+    
+                  (movie.overview.length > 100)
+                    ? Text( '${movie.overview.substring(0,100)}...' )
+                    : Text( movie.overview ),
+    
+                  Row(
+                    children: [
+                      Icon(Icons.star_half_rounded, color: Colors.yellow.shade800),
+                      const SizedBox(width: 5),
+                      Text( 
+                        HumanFormats.number(movie.voteAverage, 1),
+                        style: textStyles.bodyMedium!.copyWith(color: Colors.yellow.shade900),
+                      )
+                    ],
+                  )
+    
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+#### Debounced Movie - Stream
+
+- Realizamos una validaciones `query.isEmpty` y agregamos una lista vacia de peliculas
+- Si tenemos algun valor en el query que no es vacio, llamo al `searchMovies` y tendriamos una pelicula o movie y la agregamos al `debouncedMovies`
+- Creamos una fucion para limpiar los streams `clearStreams` y lo agrego en el `buildLeading`
+
+```
+import 'dart:async';
+
+import 'package:animate_do/animate_do.dart';
+import 'package:cinemapedia/config/helpers/human_formats.dart';
+import 'package:flutter/material.dart';
+
+import '../../domain/entities/movie.dart';
+
+// * Definir un tipo de función para hacer el searchMovie
+// * que traiga una lista de movies
+typedef SearchMoviesCallback = Future<List<Movie>> Function( String query);
+
+class SearchMovieDelegate extends SearchDelegate<Movie?> {
+
+  final SearchMoviesCallback searchMovies;
+  StreamController<List<Movie>> debouncedMovies = StreamController.broadcast();
+  Timer? _debouncerTimer;
+
+  SearchMovieDelegate({
+    required this.searchMovies
+  });
+
+  void clearStreams() {
+    debouncedMovies.close();
+  }
+
+  void _onQueryChanged( String query) {
+
+    // * funcion encargada de emitir el nuevo resultado del las películas
+    if (  _debouncerTimer?.isActive ?? false ) _debouncerTimer!.cancel();
+
+    _debouncerTimer = Timer( const Duration( milliseconds: 500 ), () async {
+      if ( query.isEmpty ) {
+        debouncedMovies.add([]);
+        return;
+      }
+
+      final movies = await searchMovies( query );
+      debouncedMovies.add(movies);
+
+    });
+  }
+
+  @override
+  String get searchFieldLabel => 'Buscar película';
+
+  @override
+  List<Widget>? buildActions(BuildContext context) {
+    return [
+
+      FadeIn(
+        animate: query.isNotEmpty,
+        child: IconButton(
+          onPressed: () => query = '', 
+          icon: const Icon(Icons.clear)
+        ),
+      ),
+
+
+    ];
+  }
+
+  @override
+  Widget? buildLeading(BuildContext context) {
+    return IconButton(
+      onPressed: () {
+        clearStreams();
+        close(context, null);
+      }, 
+      icon: const Icon(Icons.arrow_back_ios_new_rounded)
+    )
+    ;
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    return const Text('buildResults');
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+
+    // * Cada vez que toque una tecla se llama o emite el _onQueryChanged
+    _onQueryChanged(query);
+
+    return StreamBuilder(
+      // future: searchMovies(query),
+      stream: debouncedMovies.stream,
+      builder: (context, snapshot) {
+
+        final movies = snapshot.data ?? [];
+
+        return ListView.builder(
+          itemCount: movies.length,
+          itemBuilder: (context, index) => _MovieItem(
+            movie: movies[index],
+            onMovieSelected: (context, movie) {
+              clearStreams();
+              close(context, movie);
+            }
+          ),
+        );
+      },
+    );
+  }
+
+}
+
+class _MovieItem extends StatelessWidget {
+
+  final Movie movie;
+  final Function onMovieSelected;
+
+  const _MovieItem({
+    required this.movie, 
+    required this.onMovieSelected
+  });
+
+  @override
+  Widget build(BuildContext context) {
+
+    final textStyles = Theme.of(context).textTheme;
+    final size = MediaQuery.of(context).size;
+
+    return GestureDetector(
+      onTap: () {
+        onMovieSelected(context, movie);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: Row(
+          children: [
+    
+            // * Image
+            SizedBox(
+              width: size.width * 0.2,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.network(
+                  movie.posterPath,
+                  loadingBuilder: (context, child, loadingProgress) => FadeIn(child: child),
+                ),
+              ),
+            ),
+    
+            const SizedBox( width: 10),
+    
+            // * Description
+            SizedBox(
+              width: size.width * 0.7,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text( movie.title, style: textStyles.titleMedium),
+    
+                  (movie.overview.length > 100)
+                    ? Text( '${movie.overview.substring(0,100)}...' )
+                    : Text( movie.overview ),
+    
+                  Row(
+                    children: [
+                      Icon(Icons.star_half_rounded, color: Colors.yellow.shade800),
+                      const SizedBox(width: 5),
+                      Text( 
+                        HumanFormats.number(movie.voteAverage, 1),
+                        style: textStyles.bodyMedium!.copyWith(color: Colors.yellow.shade900),
+                      )
+                    ],
+                  )
+    
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+#### Search Movies Providers
+- Para mantener los resultados de la busqueda se tiene 2 formas:
+- En el `custom_appbar.dart`, agregamos en el `showSearch`, el `query: 'antman',` , pero no mantenemos los resultados en memoria, siempre realizamos peticioes http.
+
+```
+  showSearch<Movie?>(
+  query: 'antman',
+  context: context, 
+  delegate: SearchMovieDelegate(
+    searchMovies: movieRepository.searchMovies
+  )
+).then((movie) {
+  if (movie == null) return;
+
+  context.push('/movie/${ movie.id }');
+});
+```
+
+- Creamos una nueva carpeta `search` dentro de `presentation -> providers`
+- Agregamos un nuevo archivo `search_movies_provider.dart`
+
+```
+// * El primer provider que se va a manejar es el Stream
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final searchQueryProvider = StateProvider<String>((ref) => 'null');
+```
+
+- Regresamos al archivo `custom_appbar.dart`, y agregamos el siguiente codigo:
+
+```
+IconButton(
+  onPressed: () {
+    
+    final movieRepository = ref.read( movieRepositoryProvider );
+    final searchQuery = ref.read( searchQueryProvider );
+
+    showSearch<Movie?>(
+      query: searchQuery,
+      context: context, 
+      delegate: SearchMovieDelegate(
+        searchMovies: (query) {
+          ref.read(searchQueryProvider.notifier).update((state) => query);
+          return movieRepository.searchMovies(query);
+        }
+      )
+    ).then((movie) {
+      if (movie == null) return;
+
+      context.push('/movie/${ movie.id }');
+    });
+    
+  }, 
+  icon: const Icon(Icons.search)
+)
+```
+
+#### Mantener un estado con las películas buscadas
+
+- Regresamos al archivo `search_movies_provider.dart` y creamos la nueva classe `SearchedMoviesNotifier` agregamos las propiedades ` final SearchMoviesCallback searchMovies;` y `final Ref ref` 
+
+- Definimos la funcionn `typedef SearchMoviesCallback = Future<List<Movie>> Function( String query );`
+
+- Implementamos el `searchedMoviesProvider`
+
+```
+// * El primer provider que se va a manejar es el Stream
+import 'package:cinemapedia/presentation/providers/movies/movies_repository_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../domain/entities/movie.dart';
+
+final searchQueryProvider = StateProvider<String>((ref) => '');
+
+// * Este provider va a manejar las pelicuals previamente buscadas o implementacion del searchedMoviesProvider
+final searchedMoviesProvider = StateNotifierProvider<SearchedMoviesNotifier, List<Movie>>((ref) {
+
+  final movieRepository = ref.read( movieRepositoryProvider );
+
+  return SearchedMoviesNotifier(
+    ref: ref, 
+    searchMovies: movieRepository.searchMovies
+  );
+});
+
+
+// * defino una función personalizada
+typedef SearchMoviesCallback = Future<List<Movie>> Function( String query );
+
+
+
+// * Creamos el Notifier
+class SearchedMoviesNotifier extends StateNotifier<List<Movie>> {
+
+  // Propiedades son final por que  no va a cambiar
+  final SearchMoviesCallback searchMovies;
+  final Ref ref;
+
+
+  // Constructor
+  SearchedMoviesNotifier({
+    required this.searchMovies,
+    required this.ref,
+  }): super([]);
+
+  // Metodo
+  Future<List<Movie>> searchMoviesByQuery( String query ) async {
+
+    // Obtengo las peliculas
+    final List<Movie> movies = await searchMovies( query );
+    ref.read( searchQueryProvider.notifier ).update((state) => query);
+
+    // Ahora el resultado lo metemos en el estado, como es un nuevo objecto no hacemos el sprade [...movies]
+    state = movies;
+
+    return movies;
+  }
+}
+```
+
+- Ahora hacemos referencia a nuestro nuevo provider en el archivo `custom_appbar.dart`
+
+```
+ IconButton(
+  onPressed: () {
+    
+    // final movieRepository = ref.read( movieRepositoryProvider );
+    final searchQuery = ref.read( searchQueryProvider );
+
+    showSearch<Movie?>(
+      query: searchQuery,
+      context: context, 
+      delegate: SearchMovieDelegate(
+        searchMovies: ref.read( searchedMoviesProvider.notifier).searchMoviesByQuery
+      )
+    ).then((movie) {
+      if (movie == null) return;
+
+      context.push('/movie/${ movie.id }');
+    });
+    
+  }, 
+  icon: const Icon(Icons.search)
+)
+```
+
+#### Mostrar las películas previamente almacenadas
+
+- en el archivo `search_movie_delegate.dart`, agregamos una nueva propiedad `final List<Movie> initialMovies;` y agregamos esa propiedad al constructor 
+
+```
+
+
+import 'dart:async';
+
+import 'package:animate_do/animate_do.dart';
+import 'package:cinemapedia/config/helpers/human_formats.dart';
+import 'package:flutter/material.dart';
+
+import '../../domain/entities/movie.dart';
+
+// * Definir un tipo de función para hacer el searchMovie
+// * que traiga una lista de movies
+typedef SearchMoviesCallback = Future<List<Movie>> Function( String query);
+
+class SearchMovieDelegate extends SearchDelegate<Movie?> {
+
+  final SearchMoviesCallback searchMovies;
+  final List<Movie> initialMovies;
+
+  StreamController<List<Movie>> debouncedMovies = StreamController.broadcast();
+  Timer? _debouncerTimer;
+
+  SearchMovieDelegate({
+    required this.searchMovies,
+    required this.initialMovies,
+  });
+
+  void clearStreams() {
+    debouncedMovies.close();
+  }
+
+  void _onQueryChanged( String query) {
+
+    // * funcion encargada de emitir el nuevo resultado del las películas
+    if (  _debouncerTimer?.isActive ?? false ) _debouncerTimer!.cancel();
+
+    _debouncerTimer = Timer( const Duration( milliseconds: 500 ), () async {
+
+      final movies = await searchMovies( query );
+      debouncedMovies.add(movies);
+
+    });
+  }
+
+  @override
+  String get searchFieldLabel => 'Buscar película';
+
+  @override
+  List<Widget>? buildActions(BuildContext context) {
+    return [
+
+      FadeIn(
+        animate: query.isNotEmpty,
+        child: IconButton(
+          onPressed: () => query = '', 
+          icon: const Icon(Icons.clear)
+        ),
+      ),
+
+
+    ];
+  }
+
+  @override
+  Widget? buildLeading(BuildContext context) {
+    return IconButton(
+      onPressed: () {
+        clearStreams();
+        close(context, null);
+      }, 
+      icon: const Icon(Icons.arrow_back_ios_new_rounded)
+    )
+    ;
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    return const Text('buildResults');
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+
+    // * Cada vez que toque una tecla se llama o emite el _onQueryChanged
+    _onQueryChanged(query);
+
+    return StreamBuilder(
+      // future: searchMovies(query),
+      initialData: initialMovies,
+      stream: debouncedMovies.stream,
+      builder: (context, snapshot) {
+
+        final movies = snapshot.data ?? [];
+
+        return ListView.builder(
+          itemCount: movies.length,
+          itemBuilder: (context, index) => _MovieItem(
+            movie: movies[index],
+            onMovieSelected: (context, movie) {
+              clearStreams();
+              close(context, movie);
+            }
+          ),
+        );
+      },
+    );
+  }
+
+}
+
+class _MovieItem extends StatelessWidget {
+
+  final Movie movie;
+  final Function onMovieSelected;
+
+  const _MovieItem({
+    required this.movie, 
+    required this.onMovieSelected
+  });
+
+  @override
+  Widget build(BuildContext context) {
+
+    final textStyles = Theme.of(context).textTheme;
+    final size = MediaQuery.of(context).size;
+
+    return GestureDetector(
+      onTap: () {
+        onMovieSelected(context, movie);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: Row(
+          children: [
+    
+            // * Image
+            SizedBox(
+              width: size.width * 0.2,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.network(
+                  movie.posterPath,
+                  loadingBuilder: (context, child, loadingProgress) => FadeIn(child: child),
+                ),
+              ),
+            ),
+    
+            const SizedBox( width: 10),
+    
+            // * Description
+            SizedBox(
+              width: size.width * 0.7,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text( movie.title, style: textStyles.titleMedium),
+    
+                  (movie.overview.length > 100)
+                    ? Text( '${movie.overview.substring(0,100)}...' )
+                    : Text( movie.overview ),
+    
+                  Row(
+                    children: [
+                      Icon(Icons.star_half_rounded, color: Colors.yellow.shade800),
+                      const SizedBox(width: 5),
+                      Text( 
+                        HumanFormats.number(movie.voteAverage, 1),
+                        style: textStyles.bodyMedium!.copyWith(color: Colors.yellow.shade900),
+                      )
+                    ],
+                  )
+    
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+#### BuildResults
+
+- En el archivo `search_movie_delegate.dart`, copiamos el `StreamBuilder` y lo copiamos en `buildResults`, le quitamos el final y queda asi `List<Movie> initialMovies;`, ahora agregamos el `initialMovies = movies;` en la funcion `_onQueryChanged`
+
+- Creamos un nuevo metodo que se llama `buildResultsAndSuggestions` para no repetir código.
+
+```
+  Widget buildResultsAndSuggestions() {
+
+    return StreamBuilder(
+      initialData: initialMovies,
+      stream: debouncedMovies.stream,
+      builder: (context, snapshot) {
+
+        final movies = snapshot.data ?? [];
+
+        return ListView.builder(
+          itemCount: movies.length,
+          itemBuilder: (context, index) => _MovieItem(
+            movie: movies[index],
+            onMovieSelected: (context, movie) {
+              clearStreams();
+              close(context, movie);
+            }
+          ),
+        );
+      },
+    );
+
+  }
+```
+- Ahora sustituimos el `buildResults` y `buildSuggestions`, el código total quda asi:
+
+```
+
+
+import 'dart:async';
+
+import 'package:animate_do/animate_do.dart';
+import 'package:cinemapedia/config/helpers/human_formats.dart';
+import 'package:flutter/material.dart';
+
+import '../../domain/entities/movie.dart';
+
+// * Definir un tipo de función para hacer el searchMovie
+// * que traiga una lista de movies
+typedef SearchMoviesCallback = Future<List<Movie>> Function( String query);
+
+class SearchMovieDelegate extends SearchDelegate<Movie?> {
+
+  final SearchMoviesCallback searchMovies;
+  List<Movie> initialMovies;
+
+  StreamController<List<Movie>> debouncedMovies = StreamController.broadcast();
+  Timer? _debouncerTimer;
+
+  SearchMovieDelegate({
+    required this.searchMovies,
+    required this.initialMovies,
+  });
+
+  void clearStreams() {
+    debouncedMovies.close();
+  }
+
+  void _onQueryChanged( String query) {
+
+    // * funcion encargada de emitir el nuevo resultado del las películas
+    if (  _debouncerTimer?.isActive ?? false ) _debouncerTimer!.cancel();
+
+    _debouncerTimer = Timer( const Duration( milliseconds: 500 ), () async {
+
+      final movies = await searchMovies( query );
+      initialMovies = movies;
+      debouncedMovies.add(movies);
+
+    });
+  }
+
+  Widget buildResultsAndSuggestions() {
+
+    return StreamBuilder(
+      initialData: initialMovies,
+      stream: debouncedMovies.stream,
+      builder: (context, snapshot) {
+
+        final movies = snapshot.data ?? [];
+
+        return ListView.builder(
+          itemCount: movies.length,
+          itemBuilder: (context, index) => _MovieItem(
+            movie: movies[index],
+            onMovieSelected: (context, movie) {
+              clearStreams();
+              close(context, movie);
+            }
+          ),
+        );
+      },
+    );
+
+  }
+
+  @override
+  String get searchFieldLabel => 'Buscar película';
+
+  @override
+  List<Widget>? buildActions(BuildContext context) {
+    return [
+
+      FadeIn(
+        animate: query.isNotEmpty,
+        child: IconButton(
+          onPressed: () => query = '', 
+          icon: const Icon(Icons.clear)
+        ),
+      ),
+
+
+    ];
+  }
+
+  @override
+  Widget? buildLeading(BuildContext context) {
+    return IconButton(
+      onPressed: () {
+        clearStreams();
+        close(context, null);
+      }, 
+      icon: const Icon(Icons.arrow_back_ios_new_rounded)
+    )
+    ;
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    return buildResultsAndSuggestions();
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+
+    // * Cada vez que toque una tecla se llama o emite el _onQueryChanged
+    _onQueryChanged(query);
+
+    return buildResultsAndSuggestions();
+  }
+
+}
+
+class _MovieItem extends StatelessWidget {
+
+  final Movie movie;
+  final Function onMovieSelected;
+
+  const _MovieItem({
+    required this.movie, 
+    required this.onMovieSelected
+  });
+
+  @override
+  Widget build(BuildContext context) {
+
+    final textStyles = Theme.of(context).textTheme;
+    final size = MediaQuery.of(context).size;
+
+    return GestureDetector(
+      onTap: () {
+        onMovieSelected(context, movie);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: Row(
+          children: [
+    
+            // * Image
+            SizedBox(
+              width: size.width * 0.2,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.network(
+                  movie.posterPath,
+                  loadingBuilder: (context, child, loadingProgress) => FadeIn(child: child),
+                ),
+              ),
+            ),
+    
+            const SizedBox( width: 10),
+    
+            // * Description
+            SizedBox(
+              width: size.width * 0.7,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text( movie.title, style: textStyles.titleMedium),
+    
+                  (movie.overview.length > 100)
+                    ? Text( '${movie.overview.substring(0,100)}...' )
+                    : Text( movie.overview ),
+    
+                  Row(
+                    children: [
+                      Icon(Icons.star_half_rounded, color: Colors.yellow.shade800),
+                      const SizedBox(width: 5),
+                      Text( 
+                        HumanFormats.number(movie.voteAverage, 1),
+                        style: textStyles.bodyMedium!.copyWith(color: Colors.yellow.shade900),
+                      )
+                    ],
+                  )
+    
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 ```
