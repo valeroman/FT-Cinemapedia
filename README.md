@@ -6,6 +6,10 @@ A new Flutter project.
 
 1. Copiar el .env.template y renombrarlo a .env
 2. Cambiar las variables de entorno (The MovieDB)
+3. Cambios en la entidad, hay que ejecutar el comando
+```
+flutter pub run build_runner build
+```
 
 
 #### Inicio del Proyecto
@@ -6002,4 +6006,1019 @@ IconButton(
   }, 
   icon: const Icon(Icons.search)
 )
+```
+
+
+### Local Database
+
+####  Boton para marcar como favorito
+
+- abrimos el archivo `movie_screen.dart`, para agregar el icono de favoritos y crear un widget para reutilizar el gradiente `_CustomGradient`
+
+```
+class _CustomGradient extends StatelessWidget {
+
+  final AlignmentGeometry begin;
+  final AlignmentGeometry end;
+  final List<double> stops;
+  final List<Color> colors;
+
+
+  const _CustomGradient({
+    this.begin = Alignment.centerLeft,
+    this.end = Alignment.centerRight,
+    required this.stops,
+    required this.colors
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.expand(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: begin,
+            end: end, 
+            stops: stops,
+            colors: colors
+          ),
+        )
+      ),
+    );
+  }
+}
+```
+
+- Ahora utilizamos el `_CustomGradient` en el `_CustomSliverAppBar`
+
+```
+class _CustomSliverAppBar extends StatelessWidget {
+
+  final Movie movie;
+
+  const _CustomSliverAppBar({
+    required this.movie
+  });
+
+  @override
+  Widget build(BuildContext context) {
+
+    // * Tengo las dimensiones del dispositivo fisico conel MediaQuery
+    final size = MediaQuery.of(context).size;
+
+    return SliverAppBar(
+      backgroundColor: Colors.black,
+      expandedHeight: size.height * 0.7,
+      foregroundColor: Colors.white,
+      actions: [
+        IconButton(
+          onPressed: () {}, 
+          icon: const Icon(Icons.favorite_border),
+          // icon: const Icon(Icons.favorite_rounded, color: Colors.red)
+        ),
+      ],
+      shadowColor: Colors.red,
+      flexibleSpace: FlexibleSpaceBar(
+        titlePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        // title: Text(
+        //   movie.title,
+        //   style: const TextStyle(fontSize: 20),
+        //   textAlign: TextAlign.start,
+        // ),
+        background: Stack(
+          children: [
+
+            // * Imagen
+            SizedBox.expand(
+              child: Image.network(
+                movie.posterPath,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if ( loadingProgress != null ) return const SizedBox();
+                  return FadeIn(child: child);
+                },
+              ),
+            ),
+
+            // * Aplicar gradientes para el icono de favoritos
+            const _CustomGradient(
+              begin: Alignment.topRight, 
+              end: Alignment.bottomLeft,
+              stops: [0.0, 0.2], 
+              colors: [
+                Colors.black54,
+                Colors.transparent,
+              ]
+            ),
+            
+
+            // * Aplicar gradientes para fondos claros de la imagen
+            const _CustomGradient(
+              begin: Alignment.topCenter, 
+              end: Alignment.bottomCenter, 
+              stops: [0.8, 1.0], 
+              colors: [
+                Colors.transparent,
+                Colors.black54
+              ]
+            ),
+
+            // * Aplicar gradientes para la flechita del back
+            const _CustomGradient(
+              begin: Alignment.topLeft,
+              stops: [0.0, 0.3], 
+              colors: [
+                Colors.black87,
+                Colors.transparent,
+              ]
+            ),
+
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+#### Isar Database
+
+Documentación: https://isar.dev/es/
+
+- Instalacion de unos paquetes `isar isar_flutter_libs` y `isar_generator build_runner`
+- Instalación de paquetes de desarrollo `-d` `isar_generator build_runner`
+
+- Agregamos en cada una de las `entities` -> `actor.dart` y `movie.dart`, los decoradores `@collection`
+
+- Agregamos un identificador unico para la base de datos `id`  `Id? isarId;` y es opcional.
+
+- Agregamos `part 'movie.g.dart';`, este es un archivo que se va a generar de manera automatica y por es marca un error.
+
+- `movie.dart`
+
+```
+import 'package:isar/isar.dart';
+
+part 'movie.g.dart';
+
+@collection
+class Movie {
+
+    Id? isarId;
+
+    final bool adult;
+    final String backdropPath;
+    final List<String> genreIds;
+    final int id;
+    final String originalLanguage;
+    final String originalTitle;
+    final String overview;
+    final double popularity;
+    final String posterPath;
+    final DateTime releaseDate;
+    final String title;
+    final bool video;
+    final double voteAverage;
+    final int voteCount;
+
+  Movie({
+    required this.adult, 
+    required this.backdropPath, 
+    required this.genreIds, 
+    required this.id, 
+    required this.originalLanguage, 
+    required this.originalTitle, 
+    required this.overview, 
+    required this.popularity, 
+    required this.posterPath, 
+    required this.releaseDate, 
+    required this.title, 
+    required this.video, 
+    required this.voteAverage, 
+    required this.voteCount
+  });
+}
+```
+
+#### - Ahora vamos a ejecutar el generador de código
+
+- Abrimos la terminal y corremos el comando`flutter pub run build_runner build`
+
+- Una vez ejecutado el comando, se quita el error en el archivo `movie.dart` y nos crea un archivo `movie.g.dart`
+
+
+#### Repositorio y Datasource
+
+- Creamos un nuevo datasource `local_storage_datasource.dart` en la carpeta `domain -> datasources`
+
+```
+import '../entities/movie.dart';
+
+abstract class LocalStorageDatasource {
+
+  Future<void> toggleFavorite( Movie movie );
+
+  Future<bool> isMovieFavorite( int movieId );
+
+  Future<List<Movie>> loadMovies({ int limit = 10, int offset = 0 });
+
+} 
+```
+
+- Creamos un nuevo repositorio `local_storage_repository.dart` en la carpeta `domain -> repositories`
+
+```
+import '../entities/movie.dart';
+
+abstract class LocalStorageRepository {
+
+  Future<void> toggleFavorite( Movie movie );
+
+  Future<bool> isMovieFavorite( int movieId );
+
+  Future<List<Movie>> loadMovies({ int limit = 10, int offset = 0 });
+
+}
+```
+
+- Ahora vamos a hacer la implementacion del datasource y repositorio en la carpeta `infrstructure -> datasources -> repositories`
+
+- Creamos el archivo `isar_datasource.dart`, dentro de la carpeta `datasources`, por ahora no tiene mucha funcionalidad
+
+```
+
+
+import 'package:cinemapedia/domain/datasources/local_storage_datasource.dart';
+import 'package:cinemapedia/domain/entities/movie.dart';
+
+class IsarDatasource extends LocalStorageDatasource {
+  @override
+  Future<bool> isMovieFavorite(int movieId) {
+    // TODO: implement isMovieFavorite
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<Movie>> loadMovies({int limit = 10, int offset = 0}) {
+    // TODO: implement loadMovies
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> toggleFavorite(Movie movie) {
+    // TODO: implement toggleFavorite
+    throw UnimplementedError();
+  }
+
+
+
+}
+```
+
+- Creamos el archivo `local_storage_repository_impl.dart`, dentro de la carpeta `repositories`
+
+```
+import 'package:cinemapedia/domain/entities/movie.dart';
+import 'package:cinemapedia/domain/repositories/local_starage_repository.dart';
+import '../../domain/datasources/local_storage_datasource.dart';
+
+class LocalStorageRepositoryImpl extends LocalStorageRepository {
+
+  final LocalStorageDatasource datasource;
+
+  LocalStorageRepositoryImpl(this.datasource);
+
+  @override
+  Future<bool> isMovieFavorite(int movieId) {
+    return datasource.isMovieFavorite(movieId);
+  }
+
+  @override
+  Future<List<Movie>> loadMovies({int limit = 10, int offset = 0}) {
+    return datasource.loadMovies( limit: limit, offset: offset );
+  }
+
+  @override
+  Future<void> toggleFavorite(Movie movie) {
+    return datasource.toggleFavorite(movie);
+  }
+
+}
+```
+
+#### Isar Datasource Implementation
+
+- Abrimos el archivo `isar_datasource.dart` y agregamos el metodo para abrir la bd
+
+```
+
+
+import 'package:cinemapedia/domain/datasources/local_storage_datasource.dart';
+import 'package:cinemapedia/domain/entities/movie.dart';
+import 'package:isar/isar.dart';
+
+class IsarDatasource extends LocalStorageDatasource {
+
+  late Future<Isar> db;
+
+  IsarDatasource() {
+    db = openDB();
+  }
+
+  Future<Isar> openDB() async {
+
+    if (Isar.instanceNames.isEmpty ) {
+      return await Isar.open([ MovieSchema ], inspector: true);
+    }
+
+    return Future.value(Isar.getInstance());
+  }
+
+  @override
+  Future<bool> isMovieFavorite(int movieId) {
+    // TODO: implement isMovieFavorite
+    throw UnimplementedError();
+  }
+
+
+  @override
+  Future<void> toggleFavorite(Movie movie) {
+    // TODO: implement toggleFavorite
+    throw UnimplementedError();
+  }
+
+
+  @override
+  Future<List<Movie>> loadMovies({int limit = 10, int offset = 0}) {
+    // TODO: implement loadMovies
+    throw UnimplementedError();
+  }
+
+}
+```
+
+#### Implementación de los métodos necesariios
+
+- Abrimos el archivo `isar_datasource.dart` y agragamos los métodos para interactuar con la base de datos
+
+```
+import 'package:cinemapedia/domain/datasources/local_storage_datasource.dart';
+import 'package:cinemapedia/domain/entities/movie.dart';
+import 'package:isar/isar.dart';
+
+class IsarDatasource extends LocalStorageDatasource {
+
+  late Future<Isar> db;
+
+  IsarDatasource() {
+    db = openDB();
+  }
+
+  Future<Isar> openDB() async {
+
+    if (Isar.instanceNames.isEmpty ) {
+      return await Isar.open([ MovieSchema ], inspector: true);
+    }
+
+    return Future.value(Isar.getInstance());
+  }
+
+  @override
+  Future<bool> isMovieFavorite(int movieId) async {
+
+    final isar = await db;
+
+    final Movie? isFavoriteMovie = await isar.movies
+      .filter()
+      .idEqualTo(movieId)
+      .findFirst();
+
+    return isFavoriteMovie != null;
+
+  }
+
+
+  @override
+  Future<void> toggleFavorite(Movie movie) async {
+    
+    final isar = await db;
+
+    final favoriteMovie = await isar.movies
+      .filter()
+      .idEqualTo(movie.id)
+      .findFirst();
+
+    if ( favoriteMovie != null ) {
+      // Borrar
+      isar.writeTxnSync(() => isar.movies.deleteSync(favoriteMovie.isarId!));
+      return;
+    }
+
+    // Insertar
+    isar.writeTxnSync(() => isar.movies.putSync(movie));
+  }
+
+
+  @override
+  Future<List<Movie>> loadMovies({int limit = 10, int offset = 0}) async {
+    
+    final isar = await db;
+
+    return isar.movies.where()
+      .offset(offset)
+      .limit(limit)
+      .findAll();
+  }
+
+}
+```
+
+#### Provider y grabar en Base de datos
+
+- Tenemos que crear un nuevo provider para ello creamos un archivo `local_storage_provider.dart`  y la carpeta `storage`, dentro de `presentation -> providers` 
+
+```
+import 'package:cinemapedia/infrastructure/datasources/isar_datasource.dart';
+import 'package:cinemapedia/infrastructure/repositories/local_storage_repository_impl.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final localStorageRepositoryProvider = Provider((ref) {
+  return LocalStorageRepositoryImpl(IsarDatasource());
+});
+```
+
+- Ahora abrimos el archivo `movie_screen.dart`, para hacer la implementacion cuando se pesiiona el iconno del corazón para agregar o quitar de favorito.
+
+- El `_CustomSliverAppBar` lo cambiamos de `StatelessWidget` a `ConsumerWidget`
+- En el `SliverAppBar` agregamos el llamado del provider `localStorageRepositoryProvider`
+
+```
+IconButton(
+  onPressed: () {
+
+    ref.watch(localStorageRepositoryProvider).toggleFavorite(movie);
+
+  }, 
+  icon: const Icon(Icons.favorite_border),
+  // icon: const Icon(Icons.favorite_rounded, color: Colors.red)
+),
+```
+
+- Ahora le damos un `Stop` boton cuadrado rojo a la aplicacion para que tome los cambios de la bd
+
+- Le damos al icono del corazón y en el debug console nos aparece el mensaje de `ISAR CONECT STARTED` y le damos click a la direccion https y podemos ver los registros de la base de datos
+
+
+#### Future Provider  - Family modifier
+
+- En el archivo `movie_screen.dart` creamos un provider `isFavoriteProvider` para verificar si esa pelicula esta en favorito o no y tambien utilizamos el `invalidate`, para invalidarlo y volver hacer la peticion y confirme, todo eso lo hacemos en el `_CustomSliverAppBar`
+
+```
+// * FutureProvider.family => me permite mandar un argumento que es el id de la pelicula
+
+final isFavoriteProvider = FutureProvider.family.autoDispose((ref, int movieId) {
+  final localStorageRepository = ref.watch(localStorageRepositoryProvider);
+  return localStorageRepository.isMovieFavorite(movieId); // si esta en favorito
+});
+
+class _CustomSliverAppBar extends ConsumerWidget {
+
+  final Movie movie;
+
+  const _CustomSliverAppBar({
+    required this.movie
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+
+    final isFavoriteFuture = ref.watch(isFavoriteProvider(movie.id));
+
+    // * Tengo las dimensiones del dispositivo fisico conel MediaQuery
+    final size = MediaQuery.of(context).size;
+
+    return SliverAppBar(
+      backgroundColor: Colors.black,
+      expandedHeight: size.height * 0.7,
+      foregroundColor: Colors.white,
+      actions: [
+        IconButton(
+          onPressed: () {
+
+            ref.watch(localStorageRepositoryProvider).toggleFavorite(movie);
+
+            ref.invalidate(isFavoriteProvider(movie.id));
+
+          }, 
+          icon: isFavoriteFuture.when(
+            data: (isFavorite) => isFavorite
+              ? const Icon(Icons.favorite_rounded, color: Colors.red)
+              : const Icon(Icons.favorite_border), 
+            error: ( _, __) => throw UnimplementedError(), 
+            loading: () => const CircularProgressIndicator(strokeWidth: 2)
+          ),
+          // icon: const Icon(Icons.favorite_border),
+          // icon: const Icon(Icons.favorite_rounded, color: Colors.red)
+        ),
+      ],
+      shadowColor: Colors.red,
+      flexibleSpace: FlexibleSpaceBar(
+        titlePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        // title: Text(
+        //   movie.title,
+        //   style: const TextStyle(fontSize: 20),
+        //   textAlign: TextAlign.start,
+        // ),
+        background: Stack(
+          children: [
+
+            // * Imagen
+            SizedBox.expand(
+              child: Image.network(
+                movie.posterPath,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if ( loadingProgress != null ) return const SizedBox();
+                  return FadeIn(child: child);
+                },
+              ),
+            ),
+
+            // * Aplicar gradientes para el icono de favoritos
+            const _CustomGradient(
+              begin: Alignment.topRight, 
+              end: Alignment.bottomLeft,
+              stops: [0.0, 0.2], 
+              colors: [
+                Colors.black54,
+                Colors.transparent,
+              ]
+            ),
+            
+
+            // * Aplicar gradientes para fondos claros de la imagen
+            const _CustomGradient(
+              begin: Alignment.topCenter, 
+              end: Alignment.bottomCenter, 
+              stops: [0.8, 1.0], 
+              colors: [
+                Colors.transparent,
+                Colors.black54
+              ]
+            ),
+
+            // * Aplicar gradientes para la flechita del back
+            const _CustomGradient(
+              begin: Alignment.topLeft,
+              stops: [0.0, 0.3], 
+              colors: [
+                Colors.black87,
+                Colors.transparent,
+              ]
+            ),
+
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+#### Favorite MoviesProvider
+
+- Creamos un nuevo archivo provider `favorite_movies_provider.dart`, en la carpeta `presentation -> providers -> storage`
+
+```
+import 'package:cinemapedia/domain/repositories/local_starage_repository.dart';
+import 'package:cinemapedia/presentation/providers/providers.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../domain/entities/movie.dart';
+
+
+// * Creamos un nuevo contenedor en memoria, para todas las peliculas que estan en favoritos
+
+final favoriteMoviesProvider = StateNotifierProvider<StorageMoviesNotifier, Map<int, Movie>>((ref) {
+  final localStorageRepository = ref.watch(localStorageRepositoryProvider);
+  return StorageMoviesNotifier(localStorageRepository: localStorageRepository);
+});
+
+/*
+
+  {
+    1234: Movie,
+    1644: Movie,
+    3343: Movie,
+  }
+
+*/
+
+class StorageMoviesNotifier extends StateNotifier<Map<int, Movie>> {
+
+  int page= 0;
+  final LocalStorageRepository localStorageRepository;
+
+  StorageMoviesNotifier({
+    required this.localStorageRepository
+  }): super({});
+
+  Future<void> loadNextPage() async {
+
+    final movies = await localStorageRepository.loadMovies(offset: page * 10); //TODO: limit 20
+    page++;
+
+    final tempMoviesMap = <int, Movie>{};
+    for(final movie in movies) {
+      tempMoviesMap[movie.id] = movie;
+    }
+
+    state = { ...state, ...tempMoviesMap };
+  }
+
+}
+```
+
+
+#### Mostrar Peliculas Favoritas
+
+- Abrimos el archivo `favorites_view.dart`, cambiamos `StatelessWidget` por `StatefulWidget` y lo volvemos a cambiar por un `ConsumerStatefulWidget`
+
+- Cargamos de bd las peliculas favoritas y tambien cambiamos el `Map<int, Movie>>`  a `List<Movie>` usando el `.value.toList()`
+
+```
+import 'package:cinemapedia/presentation/providers/storage/favorite_movies_provider.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+class FavoritesView extends ConsumerStatefulWidget {
+  const FavoritesView({super.key});
+
+  @override
+  FavoritesViewState createState() => FavoritesViewState();
+}
+
+class FavoritesViewState extends ConsumerState<FavoritesView> {
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Cargamos las peliculas
+    ref.read( favoriteMoviesProvider.notifier).loadNextPage();
+  }
+
+
+  @override
+  Widget build(BuildContext context) {
+
+    // * Cambiamos el Map<int, Movie>>  a List<Movie> usando el .value.toList()
+    final favoritesMovies = ref.watch(favoriteMoviesProvider).values.toList();
+    
+
+    return Scaffold(
+      body: ListView.builder(
+        itemCount: favoritesMovies.length,
+        itemBuilder: (context, index) {
+          final movie = favoritesMovies[index];
+          
+          return ListTile(
+            title: Text(movie.title),
+          );
+        },
+      ),
+    );
+  }
+}
+```
+
+#### StaggeredGridView - MasonryGridView
+
+Documentación: https://pub.dev/packages/flutter_staggered_grid_view
+
+- Instalación del paquete: `flutter_staggered_grid_view`
+
+- Creamos el archivo `movie_masonry.dart`, en la carpeta `presentation -> widgets -> movies`
+
+```
+import 'package:flutter/material.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+
+import '../../../domain/entities/movie.dart';
+import 'movie_poster_link.dart';
+
+class MovieMasonry extends StatefulWidget {
+
+  final List<Movie> movies;
+  final VoidCallback? loadNextPage;
+
+  const MovieMasonry({
+    super.key, 
+    required this.movies, 
+    this.loadNextPage
+  });
+
+  @override
+  State<MovieMasonry> createState() => _MovieMasonryState();
+}
+
+class _MovieMasonryState extends State<MovieMasonry> {
+
+  // todo: initState
+
+  // todo: dispose
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: MasonryGridView.count(
+        crossAxisCount: 3, // 3 columnas
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        itemCount: widget.movies.length,
+        itemBuilder: (context, index) {
+          
+          if ( index == 1 ) {
+            return Column(
+              children: [
+                const SizedBox(height: 40),
+                MoviePosterLink( movie: widget.movies[index] ),
+              ],
+            );
+          }
+          return MoviePosterLink( movie: widget.movies[index] );
+        },
+      ),
+    );
+  }
+}
+```
+
+- Creamos el archivo `movie_poster_link.dart`, en la carpeta `presentation -> widgets -> movies`
+
+```
+import 'package:animate_do/animate_do.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../domain/entities/movie.dart';
+
+class MoviePosterLink extends StatelessWidget {
+
+  final Movie movie;
+
+  const MoviePosterLink({
+    super.key, 
+    required this.movie
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeInUp(
+      child: GestureDetector(
+        onTap: () => context.push('/home/0/movie/${ movie.id }'),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: FadeIn(
+            child: Image.network(movie.posterPath),
+      
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+- En el archivo `favorites_view.dart` usamos el widget `MovieMasonry`
+
+```
+import 'package:cinemapedia/presentation/providers/storage/favorite_movies_provider.dart';
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+class FavoritesView extends ConsumerStatefulWidget {
+  const FavoritesView({super.key});
+
+  @override
+  FavoritesViewState createState() => FavoritesViewState();
+}
+
+class FavoritesViewState extends ConsumerState<FavoritesView> {
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Cargamos las peliculas
+    ref.read( favoriteMoviesProvider.notifier).loadNextPage();
+  }
+
+
+  @override
+  Widget build(BuildContext context) {
+
+    // * Cambiamos el Map<int, Movie>>  a List<Movie> usando el .value.toList()
+    final favoritesMovies = ref.watch(favoriteMoviesProvider).values.toList();
+    
+    return Scaffold(
+      body: MovieMasonry(movies: favoritesMovies),
+    );
+  }
+}
+```
+
+
+#### Masonry Infinite Scroll
+
+- Abrimos el archivo `movie_masonry.dart` 
+- Creamos `final scrollController = ScrollController();` y el metodo `initState` y `dispose` 
+
+```
+import 'package:flutter/material.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+
+import '../../../domain/entities/movie.dart';
+import 'movie_poster_link.dart';
+
+class MovieMasonry extends StatefulWidget {
+
+  final List<Movie> movies;
+  final VoidCallback? loadNextPage;
+
+  const MovieMasonry({
+    super.key, 
+    required this.movies, 
+    this.loadNextPage
+  });
+
+  @override
+  State<MovieMasonry> createState() => _MovieMasonryState();
+}
+
+class _MovieMasonryState extends State<MovieMasonry> {
+
+  final scrollController = ScrollController();
+
+  // todo: initState
+  @override
+  void initState() {
+    super.initState();
+
+     scrollController.addListener(() {
+      if ( widget.loadNextPage == null ) return;
+
+      if ( (scrollController.position.pixels + 200) >= scrollController.position.maxScrollExtent  ) {
+        widget.loadNextPage!();
+      }
+    });
+  }
+
+  // todo: dispose
+  @override
+  void dispose() {
+    scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: MasonryGridView.count(
+        controller: scrollController,
+        crossAxisCount: 3, // 3 columnas
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        itemCount: widget.movies.length,
+        itemBuilder: (context, index) {
+          
+          if ( index == 1 ) {
+            return Column(
+              children: [
+                const SizedBox(height: 40),
+                MoviePosterLink( movie: widget.movies[index] ),
+              ],
+            );
+          }
+          return MoviePosterLink( movie: widget.movies[index] );
+        },
+      ),
+    );
+  }
+}
+```
+
+#### Dinamicamente remover y agregar peliculas
+
+- abrimos el archivo `favorite_movies_provider.dart` y agregamos una nueva función `toggleFavorite`
+
+
+```
+Future<void> toggleFavorite( Movie movie) async {
+
+  await localStorageRepository.toggleFavorite(movie);
+
+  // * verifico si ya existe esa pelicula en el listado de peliculas favoritas
+  final bool isMovieInFavorites = state[movie.id] != null;
+
+  if ( isMovieInFavorites ) {
+    state.remove(movie.id);
+    state = { ...state };
+  } else {
+    state = { ...state, movie.id: movie };
+  }
+}
+```
+
+#### Mostrar mensaje si no hay favoritos
+
+- Abrir el archivo `favorites_view.dart`, y agregamos un icono, texto y un boton cuando no se tienen películas en favoritos
+
+```
+import 'package:cinemapedia/presentation/providers/storage/favorite_movies_provider.dart';
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+class FavoritesView extends ConsumerStatefulWidget {
+  const FavoritesView({super.key});
+
+  @override
+  FavoritesViewState createState() => FavoritesViewState();
+}
+
+class FavoritesViewState extends ConsumerState<FavoritesView> {
+
+  bool isLastPage = false;
+  bool isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Cargamos las peliculas
+    loadNextPage();
+    // ref.read( favoriteMoviesProvider.notifier).loadNextPage();
+  }
+
+  void loadNextPage() async {
+
+    if ( isLoading || isLastPage ) return;
+
+    isLoading = true;
+
+    final movies = await ref.read(favoriteMoviesProvider.notifier).loadNextPage();
+    isLoading = false;
+
+    if ( movies.isEmpty ) {
+      isLastPage = true;
+    }
+
+  }
+
+
+  @override
+  Widget build(BuildContext context) {
+
+    // * Cambiamos el Map<int, Movie>>  a List<Movie> usando el .value.toList()
+    final favoritesMovies = ref.watch(favoriteMoviesProvider).values.toList();
+
+    if ( favoritesMovies.isEmpty ) {
+
+      final colors= Theme.of(context).colorScheme;
+
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            
+            Icon( Icons.favorite_outline_sharp, size: 60, color: colors.primary ),
+            Text('Ohhh no!!', style: TextStyle( fontSize: 30, color: colors.primary)),
+            const Text('No tienes películas favoritas', style: TextStyle( fontSize: 20, color: Colors.black45)),
+            
+            const SizedBox(height: 20),
+
+            FilledButton.tonal(
+              onPressed: () => context.go('/home/0'), 
+              child: const Text('Empieza a buscar'),
+            )
+
+          ],
+        ),
+      );
+    }
+    
+    return Scaffold(
+      body: MovieMasonry(
+        movies: favoritesMovies,
+        loadNextPage: loadNextPage,
+      ),
+    );
+  }
+}
 ```
