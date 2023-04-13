@@ -5582,3 +5582,424 @@ class _MovieItem extends StatelessWidget {
   }
 }
 ```
+
+### Go Router - Tabs - Preservar el estado
+
+####  Creación de Vistas
+
+- Creamos la carpeta `views -> movies` dentro de ``presentation
+- Creamos los archivos `home_view.dart` y `favorites_view.dart`
+- En el archivo `favorites_view.dart`, agregamos
+
+```
+import 'package:flutter/material.dart';
+
+class FavoritesView extends StatelessWidget {
+  const FavoritesView({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Favorites View'),
+      ),
+      body: const Center(child: Text('Favoritos')),
+    );
+  }
+}
+```
+
+- Ahora vamos al archivo `home_screen.dart` y cortamos todo el `_HomeView` y lo pegamos en el archivo `home_view.dart`
+
+```
+import 'package:cinemapedia/presentation/providers/providers.dart';
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+
+class HomeView extends ConsumerStatefulWidget {
+  const HomeView({ super.key });
+
+  @override
+  HomeViewState createState() => HomeViewState();
+}
+
+class HomeViewState extends ConsumerState<HomeView> {
+
+  @override
+  void initState() {
+    super.initState();
+
+    ref.read( nowPlayingMoviesProvider.notifier ).loadNextPage();
+    ref.read( popularMoviesProvider.notifier ).loadNextPage();
+    ref.read( topRatedMoviesProvider.notifier ).loadNextPage();
+    ref.read( upcomingMoviesProvider.notifier ).loadNextPage();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+
+    final initialLoading = ref.watch( initialLoadingProvider );
+    if ( initialLoading ) return const FullScreenLoader();
+
+    final nowPlayingMovies = ref.watch( nowPlayingMoviesProvider );
+    final slideShowMovies = ref.watch(moviesSlideshowProvider);
+    final popularMovies = ref.watch( popularMoviesProvider );
+    final topRatedMovies = ref.watch( topRatedMoviesProvider );
+    final upcomingMovies = ref.watch( upcomingMoviesProvider );
+
+    return CustomScrollView(
+      slivers: [
+
+        const SliverAppBar(
+          floating: true,
+          flexibleSpace: FlexibleSpaceBar(
+            title: CustomAppbar(),
+          ),
+        ),
+
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              return Column(
+                children: [
+            
+                  // const CustomAppbar(),
+            
+                  MoviesSlideshow(movies: slideShowMovies),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'En Cine',
+                    subTitle: 'Lunes 20',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: upcomingMovies,
+                    title: 'Proximamente',
+                    subTitle: 'En este mes',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(upcomingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: popularMovies,
+                    title: 'Populares',
+                    // subTitle: 'En este mes',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(popularMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: topRatedMovies,
+                    title: 'Mejor calificadas',
+                    subTitle: 'Desde siempre',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(topRatedMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+                ]
+              );
+            },
+            childCount: 1,
+          )
+        )
+      ],
+    );
+  }
+}
+```
+
+- Creamos el archivo de barril `views.dart`
+
+- Modificamos el archivo `home_screen.dart`
+
+```
+import 'package:flutter/material.dart';
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
+
+import '../../views/views.dart';
+
+
+class HomeScreen extends StatelessWidget {
+
+  static const name = 'home-screen';
+
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: HomeView(),
+      ),
+      bottomNavigationBar: CustomBottomNavigation(),
+    );
+  }
+}
+
+```
+
+#### Configuración de rutas
+
+- Abrimos el archivo `home_screen.dart` y colocamos el siguiente código:
+- El `IndexedStack`, permite mantener el estado de la aplicación, se maniene el `momentun` por ejemplo los los scroll de las peliculas
+
+```
+import 'package:flutter/material.dart';
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
+
+import '../../views/views.dart';
+
+
+class HomeScreen extends StatelessWidget {
+
+  static const name = 'home-screen';
+  final int pageIndex;
+
+  const HomeScreen({
+    super.key, 
+    required this.pageIndex
+  });
+
+  final viewRouters = const <Widget>[
+    HomeView(),
+    SizedBox(),
+    FavoritesView(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(
+        index: pageIndex,
+        children: viewRouters,
+      ),
+      bottomNavigationBar: CustomBottomNavigation(),
+    );
+  }
+}
+
+```
+
+- Abrimos el archivo `app_router.dart` y colocamos el siguiente código:
+
+```
+import 'package:cinemapedia/presentation/screens/screens.dart';
+import 'package:go_router/go_router.dart';
+
+final appRouter = GoRouter(
+  initialLocation: '/home/0',
+  routes: [
+
+    GoRoute(
+      path: '/home/:page',
+      name: HomeScreen.name,
+      builder: (context, state) {
+
+        final pageIndex = int.parse(state.params['page'] ?? '0');
+
+        return HomeScreen( pageIndex: pageIndex );
+      },
+      routes: [
+        GoRoute(
+          path: 'movie/:id',
+          name: MovieScreen.name,
+          builder: (context, state) {
+            final movieId = state.params['id'] ?? 'no-id';
+            return MovieScreen(movieId: movieId);
+          },
+        ),
+      ]
+    ),
+  ]
+);
+```
+
+#### Funcionamiento del Bottom Navigation Bar
+
+- en el archivo `custom_bottom_navigation.dart`, agregamos una nueva propiedad `final int currentIndex;` y el metodo `onItemTapped`
+
+```
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+class CustomBottomNavigation extends StatelessWidget {
+
+  final int currentIndex;
+
+  const CustomBottomNavigation({
+    super.key, 
+    required this.currentIndex
+  });
+
+  // Metodos
+  void onItemTapped( BuildContext context, int index ) {
+
+    switch (index) {
+      case 0:
+        context.go('/home/0');
+      break;
+      case 1:
+        context.go('/home/1');
+      break;
+      case 2:
+        context.go('/home/2');
+      break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BottomNavigationBar(
+      elevation: 0,
+      currentIndex: currentIndex,
+      onTap: (value) => onItemTapped(context, value),
+      items: const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.home_max),
+          label: 'Inicio'
+        ),
+         BottomNavigationBarItem(
+          icon: Icon(Icons.label_outline),
+          label: 'Categorías'
+        ),
+         BottomNavigationBarItem(
+          icon: Icon(Icons.favorite_outline),
+          label: 'Favoritos'
+        )
+      ],
+    );
+  }
+}
+```
+
+- ahora en el archivo `home_screen`, le mandamos el nuevo argumento `currentIndex` al `CustomBottomNavigation`
+
+```
+import 'package:flutter/material.dart';
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
+
+import '../../views/views.dart';
+
+
+class HomeScreen extends StatelessWidget {
+
+  static const name = 'home-screen';
+  final int pageIndex;
+
+  const HomeScreen({
+    super.key, 
+    required this.pageIndex
+  });
+
+  final viewRouters = const <Widget>[
+    HomeView(),
+    SizedBox(),
+    FavoritesView(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(
+        index: pageIndex,
+        children: viewRouters,
+      ),
+      bottomNavigationBar: CustomBottomNavigation( currentIndex: pageIndex ),
+    );
+  }
+}
+
+
+```
+
+#### Resolver la navegación
+
+- Abrimos el archivo `app_router.dart` y agregamos una nueva configuracion de un `GoRoute` `redirect`.
+
+```
+import 'package:cinemapedia/presentation/screens/screens.dart';
+import 'package:go_router/go_router.dart';
+
+final appRouter = GoRouter(
+  initialLocation: '/home/0',
+  routes: [
+
+    GoRoute(
+      path: '/home/:page',
+      name: HomeScreen.name,
+      builder: (context, state) {
+
+        final pageIndex = int.parse(state.params['page'] ?? '0');
+
+        return HomeScreen( pageIndex: pageIndex );
+      },
+      routes: [
+        GoRoute(
+          path: 'movie/:id',
+          name: MovieScreen.name,
+          builder: (context, state) {
+            final movieId = state.params['id'] ?? 'no-id';
+            return MovieScreen(movieId: movieId);
+          },
+        ),
+      ]
+    ),
+
+    GoRoute(
+      path: '/',
+      redirect: ( _, __ ) => '/home/0'
+    )
+  ]
+);
+```
+
+- Para navegar al detalle de la pelicula hacemos lo siguiente:
+- Abrimos el archivo `movie_horizontal_listview.dart`, ahi es donde le damos click a la imagen de la pelicula y nos lleva a la pagina movie
+- Actualizamos la ruta:
+
+```
+return GestureDetector(
+  onTap: () => context.push('/home/0/movie/${ movie.id }'),
+  child: FadeIn(child: child),
+);
+```
+- En el archivo `custom_appbar.dart` para que se haga la navegacion a la pantalla de `movie_screen.dart`, actualizamos `context.push('/home/0/movie/${ movie.id }');`.
+
+```
+IconButton(
+  onPressed: () {
+    
+    final searchedMovies = ref.read(searchedMoviesProvider);
+    final searchQuery = ref.read( searchQueryProvider );
+
+    showSearch<Movie?>(
+      query: searchQuery,
+      context: context, 
+      delegate: SearchMovieDelegate(
+        initialMovies: searchedMovies,
+        searchMovies: ref.read( searchedMoviesProvider.notifier).searchMoviesByQuery
+      )
+    ).then((movie) {
+      if (movie == null) return;
+
+      context.push('/home/0/movie/${ movie.id }');
+    });
+    
+  }, 
+  icon: const Icon(Icons.search)
+)
+```
