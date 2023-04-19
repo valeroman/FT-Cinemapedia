@@ -1,5 +1,7 @@
 import 'package:animate_do/animate_do.dart';
+import 'package:cinemapedia/config/helpers/human_formats.dart';
 import 'package:cinemapedia/presentation/providers/providers.dart';
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -52,6 +54,142 @@ class MovieScreenState extends ConsumerState<MovieScreen> {
             (context, index) => _MovieDetails(movie: movie),
             childCount: 1
           ))
+        ],
+      ),
+    );
+  }
+}
+
+class _MovieDetails extends StatelessWidget {
+
+  final Movie movie;
+
+  const _MovieDetails({required this.movie});
+
+  @override
+  Widget build(BuildContext context) {
+
+    final size = MediaQuery.of(context).size;
+    final textStyle = Theme.of(context).textTheme;
+
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+
+        //* Titulo, OverView y Rating
+        _TitleAndOverview(size: size, movie: movie, textStyle: textStyle),
+
+        // * Generos de la película
+        _Genres(movie: movie),
+
+        //* Actores de la película
+        ActorsByMovie(movieId: movie.id.toString()),
+
+        // * Video de la película (si tiene)
+        VideoFromMovie(movieId: movie.id),
+
+        //* Películas Similares
+        SimilarMovies(movieId: movie.id),
+
+        const SizedBox(height: 50)
+      ],
+    );
+  }
+}
+
+class _Genres extends StatelessWidget {
+  const _Genres({
+    required this.movie,
+  });
+
+  final Movie movie;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: SizedBox(
+        width: double.infinity,
+        child: Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          alignment: WrapAlignment.center,
+          children: [
+            ...movie.genreIds.map((gender) => Container(
+              margin: const EdgeInsets.only(right: 10),
+              // * Se podria cambiar el widget Chip por un button
+              // * y al darle click al genero llamar al endpoint
+              // * Get movie/{movie_id}/similar
+              child: Chip(
+                label: Text(gender),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              ),
+            ))
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TitleAndOverview extends StatelessWidget {
+  const _TitleAndOverview({
+    required this.size,
+    required this.movie,
+    required this.textStyle,
+  });
+
+  final Size size;
+  final Movie movie;
+  final TextTheme textStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 15),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          // * Imagen
+          ClipRRect(
+            borderRadius: BorderRadiusDirectional.circular(20),
+            child: Image.network(
+              movie.posterPath,
+              width: size.width * 0.3,
+            ),
+          ),
+
+          const SizedBox(width: 10),
+
+          // * Title, Description, Rating
+          SizedBox(
+            width: (size.width - 40) * 0.7,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+
+                Text( movie.title, style: textStyle.titleLarge ),
+                Text( movie.overview ),
+
+                const SizedBox(height: 10),
+
+                MovieRating(voteAverage: movie.voteAverage),
+
+                Row(
+                  children: [
+
+                    const Text('Estrenos:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 5),
+                    Text(HumanFormats.shortDate(movie.releaseDate))
+                  ],
+                )
+
+              ],
+            ),
+          )
+
+
         ],
       ),
     );
@@ -196,146 +334,6 @@ class _CustomGradient extends StatelessWidget {
             colors: colors
           ),
         )
-      ),
-    );
-  }
-}
-
-class _MovieDetails extends StatelessWidget {
-
-  final Movie movie;
-
-  const _MovieDetails({required this.movie});
-
-  @override
-  Widget build(BuildContext context) {
-
-    final size = MediaQuery.of(context).size;
-    final textStyle = Theme.of(context).textTheme;
-
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-
-        Padding(
-          padding:  const EdgeInsets.all(8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-
-              // * Imagen
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Image.network(
-                  movie.posterPath,
-                  width: size.width * 0.3,
-                ),
-              ),
-
-              const SizedBox( width: 10 ),
-
-              // * Titulo y Descripción
-              SizedBox(
-                width: (size.width - 40) * 0.7,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text( movie.title, style: textStyle.titleLarge ),
-                    Text( movie.overview ),
-                  ],
-                ),
-              )
-            ],
-          ),
-        ),
-
-        // * Generos de la película
-        // * Se podria cambiar el widget Chip por un button
-        // * y al darle click al genero llamar al endpoint
-        // * Get movie/{movie_id}/similar
-        Padding(
-          padding: const EdgeInsets.all(8),
-          child: Wrap(
-            children: [
-              ...movie.genreIds.map((gender) => Container(
-                margin: const EdgeInsets.only(right: 10),
-                child: Chip(
-                  label: Text(gender),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                ),
-              ))
-            ],
-          ),
-        ),
-
-        // * Mostrar Actores
-        _ActorByMovie(movieId: movie.id.toString(),),
-
-        const SizedBox(height: 50)
-      ],
-    );
-  }
-}
-
-class _ActorByMovie extends ConsumerWidget {
-
-  final String movieId; 
-
-  const _ActorByMovie({required this.movieId});
-
-  @override
-  Widget build(BuildContext context, ref) {
-
-    final actorsByMovie = ref.watch( actorsByMovieProvider );
-
-    if ( actorsByMovie[movieId] == null ) {
-      return const CircularProgressIndicator(strokeWidth: 2);
-    }
-
-    final actors = actorsByMovie[movieId]!;
-
-    return SizedBox(
-      height: 300,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: actors.length,
-        itemBuilder: (context, index) {
-          final actor = actors[index];
-
-          return Container(
-            padding: const EdgeInsets.all(8.0),
-            width: 135,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-
-                // * Actor photo
-                FadeInRight(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: Image.network(
-                      actor.profilePath,
-                      height: 180,
-                      width: 135,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-
-                // * Nombre
-                const SizedBox(height: 5),
-
-                Text(actor.name, maxLines: 2),
-                Text(
-                  actor.character ?? '', 
-                  maxLines: 2,
-                  style: const TextStyle( fontWeight: FontWeight.bold, overflow: TextOverflow.ellipsis),
-                )
-              ],
-            ),
-          );
-        },
       ),
     );
   }

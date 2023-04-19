@@ -7022,3 +7022,1418 @@ class FavoritesViewState extends ConsumerState<FavoritesView> {
   }
 }
 ```
+
+
+## Mejoras de la aplicación
+
+#### 1 -  En el `home_screen.dart` vamos a realizar varios cambios, empezaremos con sustituri el `StatelessWidget` por el `StatefulWidget` , tambien cambiaremos el `IndexedStack` por un  `PageView` y se agregará `AutomaticKeepAliveClientMixin` para preservar el estado del `PageView`
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
+
+import '../../views/views.dart';
+
+class HomeScreen extends StatefulWidget {   // -> Se cambio a un StatefulWidget
+  static const name = 'home-screen';
+  final int pageIndex;
+
+  const HomeScreen({super.key, required this.pageIndex});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin {   // -> Se agrego AutomaticKeepAliveClientMixin para preservar el estado del PageView
+
+  late PageController pageController;
+
+  @override
+  void initState() {    // -> Se agrego el initState para mantener PageController en true
+    super.initState();
+    pageController = PageController(
+      keepPage: true
+    );
+  }
+
+  @override
+  void dispose() {    // -> Se agrego el dispose para liberar el pageController
+    pageController.dispose();
+    super.dispose();
+  }
+
+
+  final viewRouters = const <Widget>[
+    HomeView(),
+    SizedBox(),
+    FavoritesView(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);   // -> Se agrego el super.build
+
+    if ( pageController.hasClients ) {
+      pageController.animateToPage(
+        widget.pageIndex, 
+        duration: const Duration(milliseconds: 250), 
+        curve: Curves.easeInOut
+      );
+    }
+
+    return Scaffold(
+      body: PageView(
+        physics: const NeverScrollableScrollPhysics(),
+        controller: pageController,
+        children: viewRouters,
+      ),
+      bottomNavigationBar:
+          CustomBottomNavigation(currentIndex: widget.pageIndex),
+    );
+  }
+
+  @override   // -> Se agrego el override
+  bool get wantKeepAlive => true;
+}
+
+```
+
+
+#### 2 - Quitamos del `home_view.dart` el `MovieHorizontalListview` de populares y agregamos el `AutomaticKeepAliveClientMixin` 
+
+```dart
+import 'package:cinemapedia/presentation/providers/providers.dart';
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+
+class HomeView extends ConsumerStatefulWidget {
+  const HomeView({ super.key });
+
+  @override
+  HomeViewState createState() => HomeViewState();
+}
+
+class HomeViewState extends ConsumerState<HomeView> with AutomaticKeepAliveClientMixin {    // -> Se agrego el AutomaticKeepAliveClientMixin
+
+  @override
+  void initState() {
+    super.initState();
+
+    ref.read( nowPlayingMoviesProvider.notifier ).loadNextPage();
+    ref.read( popularMoviesProvider.notifier ).loadNextPage();
+    ref.read( topRatedMoviesProvider.notifier ).loadNextPage();
+    ref.read( upcomingMoviesProvider.notifier ).loadNextPage();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);   // -> Se agrego el super.build
+
+    final initialLoading = ref.watch( initialLoadingProvider );
+    if ( initialLoading ) return const FullScreenLoader();
+
+    final nowPlayingMovies = ref.watch( nowPlayingMoviesProvider );
+    final slideShowMovies = ref.watch(moviesSlideshowProvider);
+    final topRatedMovies = ref.watch( topRatedMoviesProvider );
+    final upcomingMovies = ref.watch( upcomingMoviesProvider );
+
+    return CustomScrollView(
+      slivers: [
+
+        const SliverAppBar(
+          floating: true,
+          flexibleSpace: FlexibleSpaceBar(
+            title: CustomAppbar(),
+          ),
+        ),
+
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              return Column(
+                children: [
+            
+                  // const CustomAppbar(),
+            
+                  MoviesSlideshow(movies: slideShowMovies),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'En Cine',
+                    subTitle: 'Lunes 20',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: upcomingMovies,
+                    title: 'Proximamente',
+                    subTitle: 'En este mes',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(upcomingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: topRatedMovies,
+                    title: 'Mejor calificadas',
+                    subTitle: 'Desde siempre',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(topRatedMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+                ]
+              );
+            },
+            childCount: 1,
+          )
+        )
+      ],
+    );
+  }
+  
+  @override   // -> Se agrego el override
+  bool get wantKeepAlive => true;
+}
+```
+
+#### 3 - Agregamos `Populares` en el `CustomBottomNavigation`
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+class CustomBottomNavigation extends StatelessWidget {
+
+  final int currentIndex;
+
+  const CustomBottomNavigation({
+    super.key, 
+    required this.currentIndex
+  });
+
+  // Metodos
+  void onItemTapped( BuildContext context, int index ) {
+
+    switch (index) {
+      case 0:
+        context.go('/home/0');
+      break;
+      case 1:
+        context.go('/home/1');
+      break;
+      case 2:
+        context.go('/home/2');
+      break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BottomNavigationBar(
+      elevation: 0,
+      currentIndex: currentIndex,
+      onTap: (value) => onItemTapped(context, value),
+      items: const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.home_max),
+          label: 'Inicio'
+        ),
+         BottomNavigationBarItem(
+          icon: Icon(Icons.thumbs_up_down_outlined),    // -> Se cambió el icono
+          label: 'Populares'    // -> Se cambió el label
+        ),
+         BottomNavigationBarItem(
+          icon: Icon(Icons.favorite_outline),
+          label: 'Favoritos'
+        )
+      ],
+    );
+  }
+}
+```
+
+#### 4 - Agregamos una nueva vista en `views` llamada `popular_view.dart`
+
+```dart
+
+import 'package:cinemapedia/presentation/providers/providers.dart';
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+class PopularView extends ConsumerStatefulWidget {
+  const PopularView({super.key});
+
+  @override
+  PopularViewState createState() => PopularViewState();
+}
+
+class PopularViewState extends ConsumerState<PopularView> with AutomaticKeepAliveClientMixin {
+  @override
+  Widget build(BuildContext context) {
+
+    final popularMovies = ref.watch( popularMoviesProvider );
+
+    if ( popularMovies.isEmpty ) {
+      return const CircularProgressIndicator(strokeWidth: 2);
+    }
+
+    super.build(context);
+    return Scaffold(
+      body: MovieMasonry(
+        movies: popularMovies,
+        loadNextPage: () => ref.read( popularMoviesProvider.notifier ).loadNextPage(),
+      ),
+    );
+  }
+  
+  @override
+  bool get wantKeepAlive => true;
+}
+```
+
+#### 5 - Agregamos una nueva carpeta llamada `assets -> loders` y agregaoms el aechivo `bottle-loader.gif`
+
+#### 6 - Agregamos una nueva carpeta `assets -> loders` el aechivo `pubspec.yaml`
+
+``` yaml
+assets:
+  - .env
+  - assets/loaders/
+```
+
+#### 7 - Modiificamos el archivo `movies_slideshow.dart`, el  `_Slide` para navegar al detalle de la película cuando tocamos el slide automatico, 
+
+
+```dart
+class _Slide extends StatelessWidget {
+
+  final Movie movie;
+
+  const _Slide({required this.movie});
+
+  @override
+  Widget build(BuildContext context) {
+
+    final decoration = BoxDecoration(
+      borderRadius: BorderRadius.circular(20),
+      boxShadow: const [
+        BoxShadow(
+          color: Colors.black45,
+          blurRadius: 10,
+          offset: Offset(0, 10)
+        )
+      ]
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 30),
+      child: DecoratedBox(
+        decoration: decoration,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: GestureDetector(   // -> Se agrego el GestureDetector
+            onTap: () => context.push('/home/0/movie/${ movie.id }'),   // -> Se agrego el onTap para navegar a movie
+            child: FadeInImage(
+              image: NetworkImage(movie.backdropPath),
+              placeholder: const AssetImage('assets/loaders/bottle-loader.gif'),
+              fit: BoxFit.cover,
+            ),
+          )
+        ),
+      ),
+    );
+  }
+}
+```
+
+#### 8 - Creamos un nuevo widget llamado `movie_rating.dart`, en la carpeta `presentation -> widgets -> movies`
+
+```dart
+
+import 'package:cinemapedia/config/helpers/human_formats.dart';
+import 'package:flutter/material.dart';
+
+class MovieRating extends StatelessWidget {
+
+  final double voteAverage;
+
+  const MovieRating({
+    super.key, 
+    required this.voteAverage
+  });
+
+  @override
+  Widget build(BuildContext context) {
+
+    final textStyle = Theme.of(context).textTheme;
+
+    return  SizedBox(
+      width: 150,
+      child: Row(
+        children: [
+          Icon(Icons.star_half_outlined, color: Colors.yellow.shade800),
+          const SizedBox(width: 3),
+          Text(HumanFormats.number(voteAverage, 1),
+            style: textStyle.bodyMedium?.copyWith( color: Colors.yellow.shade800 ),
+          )
+        ],
+      ),
+    );
+  }
+}
+```
+
+
+#### 9 - Modiificamos el archivo `movies_horizontal_listview.dart`, el `_Slide` para navegar al detalle de la película cuando tocamos el slide automatico, 
+
+  ```dart
+class _Slide extends StatelessWidget {
+
+  final Movie movie;
+
+  const _Slide({required this.movie});
+
+  @override
+  Widget build(BuildContext context) {
+
+    final textStyles = Theme.of(context).textTheme;
+
+    return Container(
+      // color: Colors.yellow,
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          // * Imagen
+          SizedBox(
+            width: 150,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: GestureDetector(   // -> Se agrego el GestureDetector
+                onTap: () => context.push('/home/0/movie/${ movie.id }'),
+                child: FadeInImage(
+                  height: 220,
+                  image: NetworkImage(movie.posterPath),
+                  placeholder: const AssetImage('assets/loaders/bottle-loader.gif'),
+                  fit: BoxFit.cover,
+                ),
+              )
+            ),
+          ),
+
+          const SizedBox(height: 5),
+
+          // * Title
+          SizedBox(
+            width: 150,
+            child: Text(
+              movie.title,
+              maxLines: 2,
+              style: textStyles.titleSmall,
+            ),
+          ),
+
+          // * Rating
+          MovieRating(voteAverage: movie.voteAverage)   // -> Se agrego el MovieRating
+        ],
+      ),
+    );
+  }
+}
+  ```
+
+#### 10 - Modificamos el archivo `search_movie_deletage.dart` en el `_MovieItem` en el `GestureDetector`
+
+  ```dart
+   // * Image
+  SizedBox(
+    width: size.width * 0.2,
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: FadeInImage(   // -> Se agrego el FadeInImage, para usar el loader
+          height: 130,
+          image: NetworkImage(movie.posterPath),
+          placeholder: const AssetImage('assets/loaders/bottle-loader.gif'),
+          fit: BoxFit.cover,
+        )
+      ),
+    ),
+  ```
+
+
+#### 11 - Modificamos el archivo `movie_poster_link.dart`
+
+  ```dart
+  import 'package:animate_do/animate_do.dart';
+  import 'package:flutter/material.dart';
+  import 'package:go_router/go_router.dart';
+
+  import '../../../domain/entities/movie.dart';
+
+  class MoviePosterLink extends StatelessWidget {
+
+    final Movie movie;
+
+    const MoviePosterLink({
+      super.key, 
+      required this.movie
+    });
+
+    @override
+    Widget build(BuildContext context) {
+      return FadeInUp(
+        child: GestureDetector(
+          onTap: () => context.push('/home/0/movie/${ movie.id }'),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: FadeInImage(   // -> Se agrego el FadeInImage para usar el loader
+                height: 180,
+                image: NetworkImage(movie.posterPath),
+                placeholder: const AssetImage('assets/loaders/bottle-loader.gif'),
+                fit: BoxFit.cover,
+            ) 
+          ),
+        ),
+      );
+    }
+  }
+  ```
+
+#### 12 - Modificamos el archivo `movie_screen.dart`, para colocar por separado los widgets `Titulo y Descripción`, `Genres` y `Actors`
+
+```dart
+import 'package:animate_do/animate_do.dart';
+import 'package:cinemapedia/config/helpers/human_formats.dart';
+import 'package:cinemapedia/presentation/providers/providers.dart';
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../domain/entities/movie.dart';
+
+class MovieScreen extends ConsumerStatefulWidget {
+
+  static const name = 'movie-screen';
+
+  final String movieId;
+
+  const MovieScreen({
+    super.key, 
+    required this.movieId
+  });
+
+  @override
+  MovieScreenState createState() => MovieScreenState();
+}
+
+class MovieScreenState extends ConsumerState<MovieScreen> {
+
+  @override
+  void initState() {
+    super.initState();
+
+    // * Si estamos dentro del initState, metodos, callback, onTap, onPress etc.
+    // * se usa el ref.read()
+    ref.read(movieInfoProvider.notifier).loadMovie(widget.movieId);
+
+    ref.read(actorsByMovieProvider.notifier).loadActors(widget.movieId);
+
+  }
+
+  @override
+  Widget build(BuildContext context) {
+
+    final Movie? movie = ref.watch( movieInfoProvider )[widget.movieId];
+
+    if ( movie == null ) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator(strokeWidth: 2)));
+    }
+
+    return Scaffold(
+      body: CustomScrollView(
+        physics: const ClampingScrollPhysics(), // evita el rebote del scrollView
+        slivers: [
+          _CustomSliverAppBar(movie: movie),
+          SliverList(delegate: SliverChildBuilderDelegate(
+            (context, index) => _MovieDetails(movie: movie),
+            childCount: 1
+          ))
+        ],
+      ),
+    );
+  }
+}
+
+class _MovieDetails extends StatelessWidget {
+
+  final Movie movie;
+
+  const _MovieDetails({required this.movie});
+
+  @override
+  Widget build(BuildContext context) {
+
+    final size = MediaQuery.of(context).size;
+    final textStyle = Theme.of(context).textTheme;
+
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+
+        //* Titulo, OverView y Rating
+        _TitleAndOverview(size: size, movie: movie, textStyle: textStyle),
+
+        // * Generos de la película
+        _Genres(movie: movie),
+
+        //* Actores de la película
+        ActorsByMovie(movieId: movie.id.toString()),
+
+        const SizedBox(height: 50)
+      ],
+    );
+  }
+}
+
+class _Genres extends StatelessWidget {
+  const _Genres({
+    required this.movie,
+  });
+
+  final Movie movie;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: SizedBox(
+        width: double.infinity,
+        child: Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          alignment: WrapAlignment.center,
+          children: [
+            ...movie.genreIds.map((gender) => Container(
+              margin: const EdgeInsets.only(right: 10),
+              // * Se podria cambiar el widget Chip por un button
+              // * y al darle click al genero llamar al endpoint
+              // * Get movie/{movie_id}/similar
+              child: Chip(
+                label: Text(gender),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              ),
+            ))
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TitleAndOverview extends StatelessWidget {
+  const _TitleAndOverview({
+    required this.size,
+    required this.movie,
+    required this.textStyle,
+  });
+
+  final Size size;
+  final Movie movie;
+  final TextTheme textStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 15),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          // * Imagen
+          ClipRRect(
+            borderRadius: BorderRadiusDirectional.circular(20),
+            child: Image.network(
+              movie.posterPath,
+              width: size.width * 0.3,
+            ),
+          ),
+
+          const SizedBox(width: 10),
+
+          // * Title, Description, Rating
+          SizedBox(
+            width: (size.width - 40) * 0.7,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+
+                Text( movie.title, style: textStyle.titleLarge ),
+                Text( movie.overview ),
+
+                const SizedBox(height: 10),
+
+                MovieRating(voteAverage: movie.voteAverage),
+
+                Row(
+                  children: [
+
+                    const Text('Estrenos:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 5),
+                    Text(HumanFormats.shortDate(movie.releaseDate))
+                  ],
+                )
+
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+}
+
+// * FutureProvider.family => me permite mandar un argumento que es el id de la pelicula
+
+final isFavoriteProvider = FutureProvider.family.autoDispose((ref, int movieId) {
+  final localStorageRepository = ref.watch(localStorageRepositoryProvider);
+  return localStorageRepository.isMovieFavorite(movieId); // si esta en favorito
+});
+
+class _CustomSliverAppBar extends ConsumerWidget {
+
+  final Movie movie;
+
+  const _CustomSliverAppBar({
+    required this.movie
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+
+    final isFavoriteFuture = ref.watch(isFavoriteProvider(movie.id));
+
+    // * Tengo las dimensiones del dispositivo fisico conel MediaQuery
+    final size = MediaQuery.of(context).size;
+
+    return SliverAppBar(
+      backgroundColor: Colors.black,
+      expandedHeight: size.height * 0.7,
+      foregroundColor: Colors.white,
+      actions: [
+        IconButton(
+          onPressed: () async {
+
+            // ref.read(localStorageRepositoryProvider).toggleFavorite(movie);
+            await ref.read(favoriteMoviesProvider.notifier).toggleFavorite(movie);
+
+            ref.invalidate(isFavoriteProvider(movie.id));
+
+          }, 
+          icon: isFavoriteFuture.when(
+            data: (isFavorite) => isFavorite
+              ? const Icon(Icons.favorite_rounded, color: Colors.red)
+              : const Icon(Icons.favorite_border), 
+            error: ( _, __) => throw UnimplementedError(), 
+            loading: () => const CircularProgressIndicator(strokeWidth: 2)
+          ),
+          // icon: const Icon(Icons.favorite_border),
+          // icon: const Icon(Icons.favorite_rounded, color: Colors.red)
+        ),
+      ],
+      shadowColor: Colors.red,
+      flexibleSpace: FlexibleSpaceBar(
+        titlePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        // title: Text(
+        //   movie.title,
+        //   style: const TextStyle(fontSize: 20),
+        //   textAlign: TextAlign.start,
+        // ),
+        background: Stack(
+          children: [
+
+            // * Imagen
+            SizedBox.expand(
+              child: Image.network(
+                movie.posterPath,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if ( loadingProgress != null ) return const SizedBox();
+                  return FadeIn(child: child);
+                },
+              ),
+            ),
+
+            // * Aplicar gradientes para el icono de favoritos
+            const _CustomGradient(
+              begin: Alignment.topRight, 
+              end: Alignment.bottomLeft,
+              stops: [0.0, 0.2], 
+              colors: [
+                Colors.black54,
+                Colors.transparent,
+              ]
+            ),
+            
+
+            // * Aplicar gradientes para fondos claros de la imagen
+            const _CustomGradient(
+              begin: Alignment.topCenter, 
+              end: Alignment.bottomCenter, 
+              stops: [0.8, 1.0], 
+              colors: [
+                Colors.transparent,
+                Colors.black54
+              ]
+            ),
+
+            // * Aplicar gradientes para la flechita del back
+            const _CustomGradient(
+              begin: Alignment.topLeft,
+              stops: [0.0, 0.3], 
+              colors: [
+                Colors.black87,
+                Colors.transparent,
+              ]
+            ),
+
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomGradient extends StatelessWidget {
+
+  final AlignmentGeometry begin;
+  final AlignmentGeometry end;
+  final List<double> stops;
+  final List<Color> colors;
+
+
+  const _CustomGradient({
+    this.begin = Alignment.centerLeft,
+    this.end = Alignment.centerRight,
+    required this.stops,
+    required this.colors
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.expand(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: begin,
+            end: end, 
+            stops: stops,
+            colors: colors
+          ),
+        )
+      ),
+    );
+  }
+}
+```
+
+#### 13 - Creamos el archivo `actors_by_movie.dart` y la carpeta `actors`, dentro de `presentation -> widgets`
+
+```dart
+import 'package:animate_do/animate_do.dart';
+import 'package:cinemapedia/presentation/providers/providers.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+class ActorsByMovie extends ConsumerWidget {
+
+  final String movieId; 
+
+  const ActorsByMovie({
+    super.key, 
+    required this.movieId
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+
+    final actorsByMovie = ref.watch( actorsByMovieProvider );
+
+    // * Loadingactors
+    if ( actorsByMovie[movieId] == null ) {
+      return Container(
+        height: 100,
+        margin: const EdgeInsets.only(bottom: 50),
+        child: const Center(
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    final actors = actorsByMovie[movieId];
+
+    return SizedBox(
+      height: 300,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: actors!.length,
+        itemBuilder: (context, index) {
+          final actor = actors[index];
+
+          return Container(
+            padding: const EdgeInsets.all(8.0),
+            width: 135,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+
+                // * Actor photo
+                FadeInRight(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: FadeInImage(
+                      height: 180,
+                      width: 135,
+                      fit: BoxFit.cover,
+                      image: NetworkImage(actor.profilePath),
+                      placeholder: const AssetImage('assets/loaders/bottle-loader.gif'),
+                    )
+                  ),
+                ),
+
+                // * Nombre
+                const SizedBox(height: 5),
+
+                Text(actor.name, maxLines: 2),
+                Text(
+                  actor.character ?? '', 
+                  maxLines: 2,
+                  style: const TextStyle( fontWeight: FontWeight.bold, overflow: TextOverflow.ellipsis),
+                )
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+```
+
+#### 14 - Agregamos en el archivo `main.dart` el inicializar `initializeDateFormatting`
+
+
+```Dart
+import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import 'package:cinemapedia/config/router/app_router.dart';
+import 'package:cinemapedia/config/theme/app_theme.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
+
+Future<void> main() async {
+  await dotenv.load(fileName: '.env');
+  runApp(
+    const ProviderScope(child: MainApp())
+  );
+}
+
+class MainApp extends StatelessWidget {
+  const MainApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+
+    initializeDateFormatting();   // -> Se agrego initializeDateFormatting
+
+    return MaterialApp.router(
+      routerConfig: appRouter,
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme().getTheme(),
+    );
+  }
+}
+
+```
+
+## Agregamos nuevas entity, datasource y repositorie
+
+#### Creamos el entity Video , para ver los videos de youtube
+
+- Creamos el archivo `video.dart`, en la carpeta `domain -> entities`
+
+```dart
+class Video {
+
+  final String id;
+  final String name;
+  final String youtubeKey;
+  final DateTime publishedAt;
+
+  Video({
+    required this.id,
+    required this.name,
+    required this.youtubeKey,
+    required this.publishedAt
+  });
+
+}
+```
+
+#### Creamos el modelo `movie_video.dart`
+
+- Copiamos el response del api en postman `https://api.themoviedb.org/3/movie/460465/videos?api_key=xxx&language=es-ES`
+
+- Vamos a `https://app.quicktype.io/` y pegamos el response
+
+```dart
+class MoviedbVideosResponse {
+    MoviedbVideosResponse({
+        required this.id,
+        required this.results,
+    });
+
+    final int id;
+    final List<Result> results;
+
+    factory MoviedbVideosResponse.fromJson(Map<String, dynamic> json) => MoviedbVideosResponse(
+        id: json["id"],
+        results: List<Result>.from(json["results"].map((x) => Result.fromJson(x))),
+    );
+
+    Map<String, dynamic> toJson() => {
+        "id": id,
+        "results": List<dynamic>.from(results.map((x) => x.toJson())),
+    };
+}
+
+class Result {
+    Result({
+        required this.iso6391,
+        required this.iso31661,
+        required this.name,
+        required this.key,
+        required this.site,
+        required this.size,
+        required this.type,
+        required this.official,
+        required this.publishedAt,
+        required this.id,
+    });
+
+    final String iso6391;
+    final String iso31661;
+    final String name;
+    final String key;
+    final String site;
+    final int size;
+    final String type;
+    final bool official;
+    final DateTime publishedAt;
+    final String id;
+
+    factory Result.fromJson(Map<String, dynamic> json) => Result(
+        iso6391: json["iso_639_1"],
+        iso31661: json["iso_3166_1"],
+        name: json["name"],
+        key: json["key"],
+        site: json["site"],
+        size: json["size"],
+        type: json["type"],
+        official: json["official"],
+        publishedAt: DateTime.parse(json["published_at"]),
+        id: json["id"],
+    );
+
+    Map<String, dynamic> toJson() => {
+        "iso_639_1": iso6391,
+        "iso_3166_1": iso31661,
+        "name": name,
+        "key": key,
+        "site": site,
+        "size": size,
+        "type": type,
+        "official": official,
+        "published_at": publishedAt.toIso8601String(),
+        "id": id,
+    };
+}
+
+```
+
+#### Creamos el mapper `movie_video.dart`
+
+```dart
+import 'package:cinemapedia/infrastructure/models/moviedb/movie_video.dart';
+
+import '../../domain/entities/video.dart';
+
+class VideoMapper {
+
+  static moviedbVideoToEntity( Result moviedbVideo) => Video(
+
+    id: moviedbVideo.id,
+    name: moviedbVideo.name,
+    publishedAt: moviedbVideo.publishedAt,
+    youtubeKey: moviedbVideo.key
+  );
+
+}
+```
+
+
+
+#### Agregamos las nuevas funcionalidades de `getSimilarMovies` y `getYoutubeVideosById` en `datasources`, en `domain -> datasources`
+
+```dart
+import '../entities/entities.dart';
+
+
+abstract class MoviesDatasource {
+
+  Future<List<Movie>> getNowPlaying({ int page = 1 });
+
+  Future<List<Movie>> getPopular({ int page = 1 });
+
+  Future<List<Movie>> getUpcoming({ int page = 1 });
+
+  Future<List<Movie>> getTopRated({ int page = 1 });
+  
+  Future<Movie> getMovieById( String id );
+
+  Future<List<Movie>> searchMovies( String query );
+
+  Future<List<Movie>> getSimilarMovies( int movieId );    // -> Se agrego nueva
+
+  Future<List<Video>> getYoutubeVideosById( int movieId );    // -> Se agrego nueva
+}
+```
+
+#### Agregamos las nuevas funcionalidades de `getSimilarMovies` y `getYoutubeVideosById` en `repositories`, en `domain -> repositories`
+
+```dart
+
+import '../entities/entities.dart';
+
+abstract class MoviesRepository {
+
+  Future<List<Movie>> getNowPlaying({ int page = 1 });
+
+  Future<List<Movie>> getPopular({ int page = 1 });
+
+  Future<List<Movie>> getUpcoming({ int page = 1 });
+
+  Future<List<Movie>> getTopRated({ int page = 1 });
+
+  Future<Movie> getMovieById( String id );
+
+  Future<List<Movie>> searchMovies( String query );
+
+  Future<List<Movie>> getSimilarMovies( int movieId );
+
+  Future<List<Video>> getYoutubeVideosById( int movieId );
+}
+```
+
+#### Agregamos las implementaciones de `getSimilarMovies` y `getYoutubeVideosById` en `datasources`, en `infrastructure -> datasources`
+
+```dart
+
+import 'package:cinemapedia/config/constants/environment.dart';
+import 'package:cinemapedia/domain/datasources/movies_datasource.dart';
+import 'package:cinemapedia/domain/entities/movie.dart';
+import 'package:cinemapedia/domain/entities/video.dart';
+import 'package:cinemapedia/infrastructure/mappers/movie_mapper.dart';
+import 'package:cinemapedia/infrastructure/mappers/video_mapper.dart';
+import 'package:cinemapedia/infrastructure/models/moviedb/movie_details.dart';
+import 'package:cinemapedia/infrastructure/models/moviedb/movie_video.dart';
+import 'package:cinemapedia/infrastructure/models/moviedb/moviedb_response.dart';
+import 'package:dio/dio.dart';
+
+class MoviedbDatasource extends MoviesDatasource {
+
+    // Propiedades de la clase MoviedbDatasource
+    final dio = Dio(BaseOptions(
+      baseUrl: 'https://api.themoviedb.org/3',
+      queryParameters: {
+        'api_key': Environment.theMovieDbKey,
+        'language': 'es-ES' // es-MX
+      }
+    ));
+
+    List<Movie> _jsonToMovies( Map<String, dynamic> json ) {
+
+      final movieDBResponse = MovieDbResponse.fromJson(json);
+
+      // El where => nos ayuda a filtrar si no tenemos imagen del poster, no se crea la movie
+      final List<Movie> movies = movieDBResponse.results
+      .where((moviedb) => moviedb.posterPath != 'no-poster')
+      .map(
+        (moviedb) => MovieMapper.movieDBToEntity(moviedb)
+      ).toList();
+
+      return movies;  
+
+    }
+
+
+  @override
+  Future<List<Movie>> getNowPlaying({int page = 1}) async {
+
+    final response = await dio.get('/movie/now_playing',
+      queryParameters: {
+        'page': page
+      }
+    );
+
+    return _jsonToMovies(response.data);
+  }
+  
+  @override
+  Future<List<Movie>> getPopular({int page = 1}) async {
+
+    final response = await dio.get('/movie/popular',
+      queryParameters: {
+        'page': page
+      }
+    );
+
+   return _jsonToMovies(response.data);
+  
+  }
+  
+  @override
+  Future<List<Movie>> getTopRated({int page = 1}) async {
+   final response = await dio.get('/movie/top_rated',
+      queryParameters: {
+        'page': page
+      }
+    );
+
+   return _jsonToMovies(response.data);
+  }
+  
+  @override
+  Future<List<Movie>> getUpcoming({int page = 1}) async {
+    final response = await dio.get('/movie/upcoming',
+      queryParameters: {
+        'page': page
+      }
+    );
+
+   return _jsonToMovies(response.data);
+  }
+  
+  @override
+  Future<Movie> getMovieById(String id) async {
+    final response = await dio.get('/movie/$id');
+    if ( response.statusCode != 200 ) throw Exception('Movie with id: $id not found ');
+
+    final movieDetails = MovieDetails.fromJson(response.data);
+    final Movie movie = MovieMapper.movieDetailsToEntity(movieDetails);
+    return movie;
+  }
+  
+  @override
+  Future<List<Movie>> searchMovies(String query) async {
+
+    if( query.isEmpty) return [];
+    
+    final response = await dio.get('/search/movie',
+      queryParameters: {
+        'query': query
+      }
+    );
+
+   return _jsonToMovies(response.data);
+  }
+
+  @override
+  Future<List<Movie>> getSimilarMovies(int movieId) async {
+    final response = await dio.get('/movie/$movieId/similar');
+    return _jsonToMovies(response.data);
+  }
+
+  @override
+  Future<List<Video>> getYoutubeVideosById(int movieId) async {
+    final response = await dio.get('/movie/$movieId/videos');
+    final moviedbVideoResponse = MoviedbVideosResponse.fromJson(response.data);
+    final videos = <Video>[];
+
+    for(final moviedbVideo in moviedbVideoResponse.results) {
+      if ( moviedbVideo.site == 'Youtube' ) {
+        final video = VideoMapper.moviedbVideoToEntity(moviedbVideo);
+        videos.add(video);
+      }
+    }
+
+    return videos;
+  }
+}
+```
+
+#### Agregamos las implementaciones de `getSimilarMovies` y `getYoutubeVideosById` en `movie_repository_impl.dart`, en `infrastructure -> repositories`
+
+```dart
+
+
+import 'package:cinemapedia/domain/entities/movie.dart';
+import 'package:cinemapedia/domain/entities/video.dart';
+import 'package:cinemapedia/domain/repositories/movies_repository.dart';
+
+import '../../domain/datasources/movies_datasource.dart';
+
+class MovieRepositoryImpl extends MoviesRepository {
+  
+  // Llamamos al datasource
+  final MoviesDatasource datasource;
+  MovieRepositoryImpl(this.datasource);
+
+  @override
+  Future<List<Movie>> getNowPlaying({int page = 1}) {
+    return datasource.getNowPlaying(page: page);
+  }
+  
+  @override
+  Future<List<Movie>> getPopular({int page = 1}) {
+    return datasource.getPopular(page: page);
+  }
+  
+  @override
+  Future<List<Movie>> getTopRated({int page = 1}) {
+    return datasource.getTopRated(page: page);
+  }
+  
+  @override
+  Future<List<Movie>> getUpcoming({int page = 1}) {
+    return datasource.getUpcoming(page: page);
+  }
+  
+  @override
+  Future<Movie> getMovieById(String id) {
+    return datasource.getMovieById(id);
+  }
+  
+  @override
+  Future<List<Movie>> searchMovies(String query) {
+    return datasource.searchMovies(query);
+  }
+
+  @override   // -> Se agrego getSimilarMovies
+  Future<List<Movie>> getSimilarMovies(int movieId) {
+    return datasource.getSimilarMovies(movieId);
+  }
+
+  @override   // -> Se agrego getYoutubeVideosById
+  Future<List<Video>> getYoutubeVideosById(int movieId) {
+    return datasource.getYoutubeVideosById(movieId);
+  }
+
+}
+```
+
+#### Agregamos un nuevo widget llamado `movie_similar.dart`, en la carpeta `presentation -> wisgets -> movies`
+
+```dart
+import 'package:cinemapedia/domain/entities/entities.dart';
+import 'package:cinemapedia/presentation/providers/providers.dart';
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+// * FutureProvider.family => me permite mandar un argumento que es el id de la pelicula
+final similarMoviesProvider = FutureProvider.family((ref, int movieId) {
+  final movieRepository = ref.watch( movieRepositoryProvider );
+  return movieRepository.getSimilarMovies(movieId);
+});
+
+class SimilarMovies extends ConsumerWidget {
+
+  final int movieId;
+
+  const SimilarMovies({
+    super.key, 
+    required this.movieId
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+
+    final similarMoviesFuture = ref.watch( similarMoviesProvider(movieId) );
+
+    return similarMoviesFuture.when(
+      data: ( movies ) => _Recomendations(movies: movies), 
+      error: ( _, __ ) => const Center(child: Text('No se pudo cargar películas similares'),), 
+      loading: () => const Center( child: CircularProgressIndicator(strokeWidth: 2))
+    );
+
+  }
+}
+
+class _Recomendations extends StatelessWidget {
+
+  final List<Movie> movies;
+
+  const _Recomendations({required this.movies});
+
+  @override
+  Widget build(BuildContext context) {
+
+    if ( movies.isEmpty ) return const SizedBox();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 50),
+      child: MovieHorizontalListview(
+        title: 'Recomendaciones',
+        movies: movies,
+      ),
+
+    );
+  }
+}
+
+```
+
+#### Agregamos en el archivo `movie_screen.dart`, en el widget `_MovieDetails`, las películas similares `SimilarMovies`
+
+```dart
+return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+
+      //* Titulo, OverView y Rating
+      _TitleAndOverview(size: size, movie: movie, textStyle: textStyle),
+
+      // * Generos de la película
+      _Genres(movie: movie),
+
+      //* Actores de la película
+      ActorsByMovie(movieId: movie.id.toString()),
+
+      //* Películas Similares
+      SimilarMovies(movieId: movie.id),   // -> Se agrego SimilarMovies
+
+      const SizedBox(height: 50)
+    ],
+  );
+```
+
+#### Instalación del paquete youtube_player_flutter
+
+Documentación: https://pub.dev/packages/youtube_player_flutter
+
+- Instalación: 
+```
+flutter pub add youtube_player_flutter
+```

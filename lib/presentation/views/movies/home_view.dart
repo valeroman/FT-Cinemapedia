@@ -3,6 +3,8 @@ import 'package:cinemapedia/presentation/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../config/helpers/human_formats.dart';
+
 
 class HomeView extends ConsumerStatefulWidget {
   const HomeView({ super.key });
@@ -11,7 +13,7 @@ class HomeView extends ConsumerStatefulWidget {
   HomeViewState createState() => HomeViewState();
 }
 
-class HomeViewState extends ConsumerState<HomeView> {
+class HomeViewState extends ConsumerState<HomeView> with AutomaticKeepAliveClientMixin {
 
   @override
   void initState() {
@@ -25,13 +27,15 @@ class HomeViewState extends ConsumerState<HomeView> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
 
+    final now = DateTime.now();
+ 
     final initialLoading = ref.watch( initialLoadingProvider );
     if ( initialLoading ) return const FullScreenLoader();
 
     final nowPlayingMovies = ref.watch( nowPlayingMoviesProvider );
     final slideShowMovies = ref.watch(moviesSlideshowProvider);
-    final popularMovies = ref.watch( popularMoviesProvider );
     final topRatedMovies = ref.watch( topRatedMoviesProvider );
     final upcomingMovies = ref.watch( upcomingMoviesProvider );
 
@@ -58,7 +62,7 @@ class HomeViewState extends ConsumerState<HomeView> {
                   MovieHorizontalListview(
                     movies: nowPlayingMovies,
                     title: 'En Cine',
-                    subTitle: 'Lunes 20',
+                    subTitle: HumanFormats.shortDate(now),
                     loadNextPage: () {
                       // * el .read se usa dentro de funciones o callback
                       ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
@@ -72,16 +76,6 @@ class HomeViewState extends ConsumerState<HomeView> {
                     loadNextPage: () {
                       // * el .read se usa dentro de funciones o callback
                       ref.read(upcomingMoviesProvider.notifier).loadNextPage();
-                    },
-                  ),
-            
-                  MovieHorizontalListview(
-                    movies: popularMovies,
-                    title: 'Populares',
-                    // subTitle: 'En este mes',
-                    loadNextPage: () {
-                      // * el .read se usa dentro de funciones o callback
-                      ref.read(popularMoviesProvider.notifier).loadNextPage();
                     },
                   ),
             
@@ -105,4 +99,7 @@ class HomeViewState extends ConsumerState<HomeView> {
       ],
     );
   }
+  
+  @override
+  bool get wantKeepAlive => true;
 }

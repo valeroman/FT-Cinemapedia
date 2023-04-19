@@ -20,10 +20,12 @@ class MoviePosterLink extends StatelessWidget {
         onTap: () => context.push('/home/0/movie/${ movie.id }'),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(20),
-          child: FadeIn(
-            child: Image.network(movie.posterPath),
-      
-          ),
+          child: FadeInImage(
+              height: 180,
+              image: NetworkImage(movie.posterPath),
+              placeholder: const AssetImage('assets/loaders/bottle-loader.gif'),
+              fit: BoxFit.cover,
+          ) 
         ),
       ),
     );

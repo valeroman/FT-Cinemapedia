@@ -1,6 +1,5 @@
 
-
-import '../entities/movie.dart';
+import '../entities/entities.dart';
 
 abstract class MoviesDatasource {
 
@@ -15,5 +14,9 @@ abstract class MoviesDatasource {
   Future<Movie> getMovieById( String id );
 
   Future<List<Movie>> searchMovies( String query );
+
+  Future<List<Movie>> getSimilarMovies( int movieId );
+
+  Future<List<Video>> getYoutubeVideosById( int movieId );
 
 }
