@@ -262,8 +262,10 @@ class _CustomSliverAppBar extends ConsumerWidget {
                 fit: BoxFit.cover,
                 loadingBuilder: (context, child, loadingProgress) {
                   if ( loadingProgress != null ) return const SizedBox();
+                  // const AssetImage('assets/loaders/bottle-loader.gif')
                   return FadeIn(child: child);
                 },
+                
               ),
             ),
 

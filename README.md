@@ -8437,3 +8437,393 @@ Documentación: https://pub.dev/packages/youtube_player_flutter
 ```
 flutter pub add youtube_player_flutter
 ```
+
+
+## Agregando Actor Details
+
+#### Creamos `actor_screen`, en la carpeta `actors` dentro de `presentation -> screens`, agregamos un código básico
+
+```dart
+import 'package:flutter/material.dart';
+
+class ActorScreen extends StatelessWidget {
+  
+  static const name = 'actor-screen';
+
+  final String personId;
+    
+  const ActorScreen({
+    super.key, 
+    required this.personId
+  });
+
+
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Placeholder(),
+    );
+  }
+}
+
+```
+
+#### Agregamos en el `app_router.dart`, en la carpeta `config -> router`, la siguiente ruta:
+
+```dart
+import 'package:cinemapedia/presentation/screens/screens.dart';
+import 'package:go_router/go_router.dart';
+
+final appRouter = GoRouter(
+  initialLocation: '/home/0',
+  routes: [
+
+    GoRoute(
+      path: '/home/:page',
+      name: HomeScreen.name,
+      builder: (context, state) {
+
+        final pageIndex = int.parse(state.params['page'] ?? '0');
+
+        return HomeScreen( pageIndex: pageIndex );
+      },
+      routes: [
+
+        GoRoute(
+          path: 'movie/:id',
+          name: MovieScreen.name,
+          builder: (context, state) {
+            final movieId = state.params['id'] ?? 'no-id';
+            return MovieScreen(movieId: movieId);
+          },
+        ),
+
+        GoRoute(    // -> Agregamos la nueva ruta person/:id
+          path: 'person/:id',
+          name: ActorScreen.name,
+          builder: (context, state) {
+            final personId = state.params['id'] ?? 'no-id';
+            return ActorScreen(personId: personId,);
+            // return MovieScreen(movieId: movieId);
+          },
+        ),
+
+      ]
+    ),
+
+    GoRoute(
+      path: '/',
+      redirect: ( _, __ ) => '/home/0'
+    )
+  ]
+);
+```
+
+#### Modificamos en el `actors_by_movie.dart`, en la carpeta `presentation -> widgets -> actors`, lo siguiente:
+
+```dart
+import 'package:animate_do/animate_do.dart';
+import 'package:cinemapedia/presentation/providers/providers.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+class ActorsByMovie extends ConsumerWidget {
+
+  final String movieId; 
+
+  const ActorsByMovie({
+    super.key, 
+    required this.movieId
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+
+    final actorsByMovie = ref.watch( actorsByMovieProvider );
+
+    // * Loadingactors
+    if ( actorsByMovie[movieId] == null ) {
+      return Container(
+        height: 100,
+        margin: const EdgeInsets.only(bottom: 50),
+        child: const Center(
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    final actors = actorsByMovie[movieId];
+
+    return SizedBox(
+      height: 300,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: actors!.length,
+        itemBuilder: (context, index) {
+          final actor = actors[index];
+
+          return Container(
+            padding: const EdgeInsets.all(8.0),
+            width: 135,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+
+                // * Actor photo 
+                FadeInRight(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: GestureDetector(   // -> Se agrego el GestureDetector para hacer click en la imagen usando el onTap
+                      onTap: () => context.push('/home/0/person/${ actor.id }'),
+                      child: FadeInImage(
+                        height: 180,
+                        width: 135,
+                        fit: BoxFit.cover,
+                        image: NetworkImage(actor.profilePath),
+                        placeholder: const AssetImage('assets/loaders/bottle-loader.gif'),
+                      ),
+                    )
+                  ),
+                ),
+
+                // * Nombre
+                const SizedBox(height: 5),
+
+                Text(actor.name, maxLines: 2),
+                Text(
+                  actor.character ?? '', 
+                  maxLines: 2,
+                  style: const TextStyle( fontWeight: FontWeight.bold, overflow: TextOverflow.ellipsis),
+                )
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+```
+
+#### Creamos la entidad `actor_details.dart` en la carpeta `domain -> entities`
+
+```dart
+class ActorDetails {
+  final String biography;
+  final DateTime birthday;
+  final dynamic deathday;
+  final int id;
+  final String imdbId;
+  final String name;
+  final String placeOfBirth;
+  final String profilePath;
+
+  ActorDetails({
+    required this.biography, 
+    required this.birthday, 
+    required this.deathday, 
+    required this.id, 
+    required this.imdbId, 
+    required this.name, 
+    required this.placeOfBirth, 
+    required this.profilePath
+  });
+}
+```
+
+#### Creamos el modelo `actor_details.dart` en la carpeta `infrastructure -> models -> actors`
+
+- Copiamos el response del api en postman `https://api.themoviedb.org/3/person/73457?api_key=xxx&language=es-ES`
+
+- Vamos a `https://app.quicktype.io/` y pegamos el response
+
+```dart
+class ActorDetailsDB {
+    ActorDetailsDB({
+        required this.biography,
+        required this.birthday,
+        this.deathday,
+        required this.id,
+        required this.imdbId,
+        required this.name,
+        required this.placeOfBirth,
+        required this.profilePath,
+    });
+
+    final String biography;
+    final DateTime birthday;
+    final dynamic deathday;
+    final int id;
+    final String imdbId;
+    final String name;
+    final String placeOfBirth;
+    final String profilePath;
+
+    factory ActorDetailsDB.fromJson(Map<String, dynamic> json) => ActorDetailsDB(
+        biography: json["biography"],
+        birthday: DateTime.parse(json["birthday"]),
+        deathday: json["deathday"] ?? '',
+        id: json["id"],
+        imdbId: json["imdb_id"] ?? '',
+        name: json["name"],
+        placeOfBirth: json["place_of_birth"] ?? '',
+        profilePath: json["profile_path"] ?? '',
+    );
+
+    Map<String, dynamic> toJson() => {
+        "biography": biography,
+        "birthday": "${birthday.year.toString().padLeft(4, '0')}-${birthday.month.toString().padLeft(2, '0')}-${birthday.day.toString().padLeft(2, '0')}",
+        "deathday": deathday,
+        "id": id,
+        "imdb_id": imdbId,
+        "name": name,
+        "place_of_birth": placeOfBirth,
+        "profile_path": profilePath,
+    };
+}
+
+
+```
+
+
+#### Creamos el mapper `actor_details_mapper.dart`, en la carpeta `infrastructure -> mappers`
+
+```dart
+import 'package:cinemapedia/domain/entities/entities.dart';
+import 'package:cinemapedia/infrastructure/models/actors/actor_details.dart';
+
+class ActorDetailsMapper {
+
+  static ActorDetails actorDetailToEntry(ActorDetailsDB actorDetailsdb) => 
+  ActorDetails(
+    biography: actorDetailsdb.biography,
+    birthday: actorDetailsdb.birthday,
+    deathday: actorDetailsdb.deathday,
+    id: actorDetailsdb.id,
+    imdbId: actorDetailsdb.imdbId,
+    name: actorDetailsdb.name,
+    placeOfBirth: actorDetailsdb.placeOfBirth,
+    profilePath: actorDetailsdb.profilePath
+  );
+}
+
+```
+
+#### Agregamos la nueva funcionalidad de `getActorDetailsById` en `actors_datasources` datasources, en `domain -> datasources`
+
+```dart
+// * Definimos las reglas que necesito para trabajar este datasource
+import 'package:cinemapedia/domain/entities/entities.dart';
+
+
+abstract class ActorsDatasource {
+
+  Future<List<Actor>> getActorsByMovie( String movieId );
+
+  Future<ActorDetails> getActorDetailsById( String id );    // ->Se agrego nnueva funcionalidad
+}
+
+```
+
+#### Agregamos la nueva funcionalidad de `getActorDetailsById` en `actors_repository_iml` repposritory, en `domain -> repositories`
+
+```dart
+
+import '../entities/entities.dart';
+
+abstract class ActorsRepository {
+  
+  Future<List<Actor>> getActorsByMovies( String movieId );
+
+  Future<ActorDetails> getActorDetailsById( String id );    // -> Se agrego nnueva funcionalidad
+}
+```
+
+#### Agregamos la implementación de `getActorDetailsById` en datasources, en `infrastructure -> datasources`
+
+```dart
+
+import 'package:cinemapedia/domain/datasources/actors_datasource.dart';
+import 'package:cinemapedia/domain/entities/actor.dart';
+import 'package:cinemapedia/domain/entities/actor_details.dart';
+import 'package:cinemapedia/infrastructure/mappers/actor_details_mapper.dart';
+import 'package:cinemapedia/infrastructure/mappers/actor_mapper.dart';
+import 'package:cinemapedia/infrastructure/models/actors/actor_details.dart';
+import 'package:cinemapedia/infrastructure/models/moviedb/credits_response.dart';
+import 'package:dio/dio.dart';
+
+import '../../config/constants/environment.dart';
+
+class ActorMovieDbDatasource extends ActorsDatasource {
+
+  // Propiedades de la clase MoviedbDatasource
+    final dio = Dio(BaseOptions(
+      baseUrl: 'https://api.themoviedb.org/3',
+      queryParameters: {
+        'api_key': Environment.theMovieDbKey,
+        'language': 'es-ES' // es-MX
+      }
+    ));
+
+  @override
+  Future<List<Actor>> getActorsByMovie(String movieId) async {
+
+    final response = await dio.get('/movie/$movieId/credits');
+
+    final castResponse = CreditsResponse.fromJson(response.data);
+
+    List<Actor> actors = castResponse.cast.map(
+      (cast) => ActorMapper.castToEntity(cast)
+    ).toList();
+
+    return actors;
+
+  }
+
+  @override   // -> Se agrego la nueva funcionalidad
+  Future<ActorDetails> getActorDetailsById(String id) async {
+
+    final response = await dio.get('/person/$id');
+
+    if ( response.statusCode != 200 ) throw Exception('Actor with id: $id not found ');
+
+    final actorDetails = ActorDetailsDB.fromJson(response.data);
+    final ActorDetails actorDetail = ActorDetailsMapper.actorDetailToEntry(actorDetails);
+    return actorDetail;
+  }
+
+}
+
+```
+
+#### Agregamos la implementación de `getActorDetailsById` en repositories, en `infrastructure -> repositories`
+
+```dart
+
+import 'package:cinemapedia/domain/datasources/actors_datasource.dart';
+import 'package:cinemapedia/domain/entities/actor.dart';
+import 'package:cinemapedia/domain/entities/actor_details.dart';
+import 'package:cinemapedia/domain/repositories/actors_repository.dart';
+
+class ActorRepositoryImpl extends ActorsRepository  {
+
+  final ActorsDatasource datasource;
+
+  ActorRepositoryImpl(this.datasource);
+
+  @override
+  Future<List<Actor>> getActorsByMovies(String movieId) {
+    return datasource.getActorsByMovie(movieId);
+  }
+
+  @override
+  Future<ActorDetails> getActorDetailsById(String id) {
+    return datasource.getActorDetailsById(id);
+  }
+}
+```
+
+

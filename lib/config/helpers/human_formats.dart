@@ -23,4 +23,11 @@ class HumanFormats {
 
   } 
 
+  static String longDate( DateTime date ) {    
+
+    final format = DateFormat.yMMMMd('es');
+    return format.format(date);
+
+  } 
+
 }

@@ -17,6 +17,7 @@ final appRouter = GoRouter(
         return HomeScreen( pageIndex: pageIndex );
       },
       routes: [
+
         GoRoute(
           path: 'movie/:id',
           name: MovieScreen.name,
@@ -25,6 +26,17 @@ final appRouter = GoRouter(
             return MovieScreen(movieId: movieId);
           },
         ),
+
+        GoRoute(
+          path: 'person/:id',
+          name: ActorScreen.name,
+          builder: (context, state) {
+            final personId = state.params['id'] ?? 'no-id';
+            return ActorScreen(personId: personId,);
+            // return MovieScreen(movieId: movieId);
+          },
+        ),
+
       ]
     ),
 

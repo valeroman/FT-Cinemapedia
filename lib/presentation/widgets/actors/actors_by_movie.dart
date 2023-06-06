@@ -2,6 +2,7 @@ import 'package:animate_do/animate_do.dart';
 import 'package:cinemapedia/presentation/providers/providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 class ActorsByMovie extends ConsumerWidget {
 
@@ -17,7 +18,7 @@ class ActorsByMovie extends ConsumerWidget {
 
     final actorsByMovie = ref.watch( actorsByMovieProvider );
 
-    // * Loadingactors
+    // * Loading actors
     if ( actorsByMovie[movieId] == null ) {
       return Container(
         height: 100,
@@ -45,16 +46,19 @@ class ActorsByMovie extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
 
-                // * Actor photo
+                // * Actor photo 
                 FadeInRight(
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(20),
-                    child: FadeInImage(
-                      height: 180,
-                      width: 135,
-                      fit: BoxFit.cover,
-                      image: NetworkImage(actor.profilePath),
-                      placeholder: const AssetImage('assets/loaders/bottle-loader.gif'),
+                    child: GestureDetector(
+                      onTap: () => context.push('/home/0/person/${ actor.id }'),
+                      child: FadeInImage(
+                        height: 180,
+                        width: 135,
+                        fit: BoxFit.cover,
+                        image: NetworkImage(actor.profilePath),
+                        placeholder: const AssetImage('assets/loaders/bottle-loader.gif'),
+                      ),
                     )
                   ),
                 ),
