@@ -8827,3 +8827,329 @@ class ActorRepositoryImpl extends ActorsRepository  {
 ```
 
 
+### Despliegues a Play Store y Apple App Store
+
+#### Producción
+
+Para cambiar el nombre de la aplicación:
+```
+flutter pub run change_app_package_name:main com.valeroman.cinemaguia
+```
+
+Para cambiar el icono de la aplicación:
+```
+flutter pub run flutter_launcher_icons
+```
+
+Para cambiar el Splash Screen me funciono la version: 2.2.19
+```
+dart run flutter_native_splash:create
+```
+
+Android AAB
+```
+flutter build appbundle
+```
+
+#### Cambiar Bundle ID - App ID semi-automáticamente
+
+- Vamos a usar una libreria o paquete para cambiar el nombre del paquete `change_app_package_name`
+
+Documentación: https://pub.dev/packages/change_app_package_name
+
+- Instalacion del paquete en la dependencia de desarrollo: `flutter pub add change_app_package_name`
+
+- Corremos el comando:
+
+```
+flutter pub run change_app_package_name:main com.valeroman.cinemaguia
+```
+
+
+#### Cambiar ícono de la aplicación
+
+- Creador de iconos: https://www.bing.com/images/create/cinema-guia-icon-app/647f4d6616264782828291143aabee07?FORM=GUH2CR
+
+- Instalamos el paquete que permite cambiar el icono de la aplicación
+
+Documentación: https://pub.dev/packages/flutter_launcher_icons
+
+- Instalación del paquete en la dependencia de desarrollo:
+```
+flutter pub add flutter_launcher_icons
+```
+
+- Agregamos las imagenes de los iconos en la carpeta `assets -> icons`
+
+- Agregamos en el archivo pubspec.yaml lo siguiente:
+
+```
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/icon.png"
+  min_sdk_android: 21
+```
+
+```
+  assets:
+    - .env
+    - assets/loaders/
+    - assets/icons/
+```
+
+- Correr el siguiente comando:
+
+```
+flutter pub run flutter_launcher_icons
+```
+
+
+#### SplashScreen
+
+Documentación: https://pub.dev/packages/flutter_native_splash
+
+- Instalar el paquete en las dependencias flutter_native_splash
+```
+flutter pub add flutter_native_splash
+```
+
+- Agregar en el pubspec.yaml lo siguiuente:
+
+```
+flutter_native_splash:
+  color: "#252829"
+```
+
+- Correr el comando:
+
+```
+flutter pub run flutter_native_splash:create
+```
+
+- Agregar en el archivo `main.dart` el Splash
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import 'package:cinemapedia/config/router/app_router.dart';
+import 'package:cinemapedia/config/theme/app_theme.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
+
+Future<void> main() async {
+
+  FlutterNativeSplash.preserve(widgetsBinding:  WidgetsFlutterBinding.ensureInitialized());   // -> Se agrego
+
+  await dotenv.load(fileName: '.env');
+  runApp(
+    const ProviderScope(child: MainApp())
+  );
+}
+
+class MainApp extends StatelessWidget {
+  const MainApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+
+    initializeDateFormatting();
+
+    return MaterialApp.router(
+      routerConfig: appRouter,
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme().getTheme(),
+    );
+  }
+}
+
+```
+
+- Abrimos el archivo `home_view.dart`, para remover el splash
+
+```dart
+import 'package:cinemapedia/presentation/providers/providers.dart';
+import 'package:cinemapedia/presentation/widgets/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../config/helpers/human_formats.dart';
+
+
+class HomeView extends ConsumerStatefulWidget {
+  const HomeView({ super.key });
+
+  @override
+  HomeViewState createState() => HomeViewState();
+}
+
+class HomeViewState extends ConsumerState<HomeView> with AutomaticKeepAliveClientMixin {
+
+  @override
+  void initState() {
+    super.initState();
+
+    ref.read( nowPlayingMoviesProvider.notifier ).loadNextPage();
+    ref.read( popularMoviesProvider.notifier ).loadNextPage();
+    ref.read( topRatedMoviesProvider.notifier ).loadNextPage();
+    ref.read( upcomingMoviesProvider.notifier ).loadNextPage();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+
+    final now = DateTime.now();
+ 
+    final initialLoading = ref.watch( initialLoadingProvider );
+    if ( initialLoading ) return const FullScreenLoader();
+
+    //* Removemos el Splash
+    FlutterNativeSplash.remove();     // -> Se agrego para remover el splash
+
+    final nowPlayingMovies = ref.watch( nowPlayingMoviesProvider );
+    final slideShowMovies = ref.watch(moviesSlideshowProvider);
+    final topRatedMovies = ref.watch( topRatedMoviesProvider );
+    final upcomingMovies = ref.watch( upcomingMoviesProvider );
+
+    return CustomScrollView(
+      slivers: [
+
+        const SliverAppBar(
+          floating: true,
+          flexibleSpace: FlexibleSpaceBar(
+            title: CustomAppbar(),
+          ),
+        ),
+
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              return Column(
+                children: [
+            
+                  // const CustomAppbar(),
+            
+                  MoviesSlideshow(movies: slideShowMovies),
+            
+                  MovieHorizontalListview(
+                    movies: nowPlayingMovies,
+                    title: 'En Cine',
+                    subTitle: HumanFormats.shortDate(now),
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(nowPlayingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: upcomingMovies,
+                    title: 'Proximamente',
+                    subTitle: 'En este mes',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(upcomingMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+            
+                  MovieHorizontalListview(
+                    movies: topRatedMovies,
+                    title: 'Mejor calificadas',
+                    subTitle: 'Desde siempre',
+                    loadNextPage: () {
+                      // * el .read se usa dentro de funciones o callback
+                      ref.read(topRatedMoviesProvider.notifier).loadNextPage();
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+                ]
+              );
+            },
+            childCount: 1,
+          )
+        )
+      ],
+    );
+  }
+  
+  @override
+  bool get wantKeepAlive => true;
+}
+```
+
+
+#### Android - Llaves de Release y Upload
+
+Documentación: https://docs.flutter.dev/deployment/android
+
+#### Create an upload keystore, correr el comando para generar la llave del proyecto
+
+```
+  keytool -genkey -v -keystore ~/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+
+```
+
+#### Reference the keystore from the app
+
+- Creamos el archivo `key.properties`, dentro de la carpeta `android`
+
+- Agregamos lo siguiente:
+
+```
+storePassword=
+keyPassword=
+keyAlias=upload
+storeFile=/Users/romanvalero/KeysApps/cinemapedia-test.jks 
+```
+
+#### Configure signing in gradle
+
+- Abrir el archivo `[project]/android/app/build.gradle` y agregamos:
+
+```
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+```
+
+- En el mismo archivo buscamos el `buildTypes` y agregamos lo siguiente:
+
+```
+signingConfigs {
+    release {
+        keyAlias keystoreProperties['keyAlias']
+        keyPassword keystoreProperties['keyPassword']
+        storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+        storePassword keystoreProperties['storePassword']
+    }
+}
+
+buildTypes {
+    release {
+        // TODO: Add your own signing config for the release build.
+        // Signing with the debug keys for now, so `flutter run --release` works.
+        signingConfig signingConfigs.release
+    }
+}
+```
+
+- Agregar el permiso de internet en el archivo `AndroidManifest.xml` que se encuentre en `android -> app -> src -> main`
+
+```
+<uses-permission android:name="android.permission.INTERNET" />
+```
+
+
+#### Android - Crear el App Bundle
+
+- Correr el comando para construir el Bundle
+
+```
+flutter build appbundle
+```

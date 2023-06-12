@@ -1,4 +1,4 @@
-package com.example.cinemapedia
+package com.valeroman.cinemapediatest
 
 import io.flutter.embedding.android.FlutterActivity
 
